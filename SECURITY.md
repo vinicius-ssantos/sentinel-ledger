@@ -31,6 +31,12 @@ Reports will be acknowledged as capacity permits. Confirmed issues will be track
 - safe, generic authentication errors;
 - no secret values in logs, traces, metrics, fixtures, or screenshots.
 
+The maintained trust boundaries, priority threats, and verification requirements are documented in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
+## Public demo gate
+
+Before a public deployment, authentication/ownership tests, operator authorization, webhook replay checks, telemetry redaction assertions, dependency review, secret scanning, and container scanning must pass. Results may demonstrate engineering controls but must not be presented as a production compliance certification.
+
 ## Supported versions
 
 Only the default branch is considered current during active development. A formal supported-version table will be added after the first tagged release.
