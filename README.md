@@ -62,18 +62,19 @@ These capabilities may be evaluated later only through measured requirements and
 
 1. The total successful capture cannot exceed the authorized amount.
 2. The total successful refund cannot exceed captured value not previously refunded.
-3. Only explicitly allowed payment state transitions may occur.
-4. Every posted ledger transaction has equal debit and credit totals.
-5. Ledger entries are append-only and are never updated or deleted.
-6. Corrections are represented by compensating transactions.
-7. Balance projections can be rebuilt from authoritative ledger entries.
-8. The same idempotency key and request payload cannot produce two effects.
-9. Reusing an idempotency key with a different payload is rejected.
-10. Provider uncertainty is represented explicitly and never guessed as success or failure.
-11. Duplicate or out-of-order provider evidence cannot reapply an effect.
-12. Repeated reconciliation cannot create duplicate open cases for the same mismatch.
-13. Reconciliation resolution preserves original evidence, actor, and reason.
-14. Every sensitive business or operator command leaves redacted audit evidence.
+3. The MVP accepts no new capture after the first successful refund.
+4. Only explicitly allowed payment state transitions may occur.
+5. Every posted ledger transaction has equal debit and credit totals.
+6. Ledger entries are append-only and are never updated or deleted.
+7. Corrections are represented by compensating transactions.
+8. Balance projections can be rebuilt from authoritative ledger entries.
+9. The same idempotency key and request payload cannot produce two effects.
+10. Reusing an idempotency key with a different payload is rejected.
+11. Provider uncertainty is represented explicitly and never guessed as success or failure.
+12. Duplicate or out-of-order provider evidence cannot reapply an effect.
+13. Repeated reconciliation cannot create duplicate open cases for the same mismatch.
+14. Reconciliation resolution preserves original evidence, actor, and reason.
+15. Every sensitive business or operator command leaves redacted audit evidence.
 
 Each rule has a stable identifier, enforcement point, and proof requirement in [docs/INVARIANTS.md](docs/INVARIANTS.md).
 
@@ -141,6 +142,7 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 | `POST` | `/api/v1/payment-intents` | Create a payment intent |
 | `GET` | `/api/v1/payment-intents/{id}` | Read current payment state |
 | `POST` | `/api/v1/payment-intents/{id}/authorize` | Request authorization |
+| `POST` | `/api/v1/payment-intents/{id}/cancel` | Cancel before authorization begins |
 | `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount |
 | `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount |
 | `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline |
@@ -211,6 +213,9 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for exit criteria and [docs/adr](docs/adr
 - [Project brief](docs/PROJECT_BRIEF.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Domain model](docs/DOMAIN_MODEL.md)
+- [Payment state machine](docs/PAYMENT_STATE_MACHINE.md)
+- [Ledger policy and postings](docs/LEDGER_POSTINGS.md)
+- [Persistent idempotency and errors](docs/IDEMPOTENCY_AND_ERRORS.md)
 - [Engineering invariants](docs/INVARIANTS.md)
 - [Failure model](docs/FAILURE_MODEL.md)
 - [Threat model](docs/THREAT_MODEL.md)
