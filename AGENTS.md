@@ -68,14 +68,14 @@ Every behavior change must prove the affected invariant at the levels required b
 - Trace important tests to stable invariant IDs in names, display names, or nearby documentation.
 - Run the narrowest relevant checks while iterating, then the complete verification command before handoff.
 
-There is no application build in the current documentation-only phase. Until the bootstrap issue lands, verify Markdown changes with:
+There is no application build in the current documentation-only phase. Until the bootstrap issue lands, verify repository documentation with:
 
 ```bash
 git diff --check
-rg -n '[[:blank:]]+$' --glob '*.md' --glob '.github/*.md' .
+python3 scripts/validate_docs.py
 ```
 
-The second command must produce no matches. Also verify that every edited relative Markdown link resolves in the proposed repository tree. Once the Maven wrapper exists, `./mvnw verify` becomes the canonical full check and this section must be updated in the same change.
+The validator checks trailing whitespace, relative Markdown links, the `CLAUDE.md` import, the ignored local Claude file, and the agent-instruction size limit. Once the Maven wrapper exists, `./mvnw verify` becomes the canonical full application check and this section must be updated in the same change.
 
 ## Contract and documentation changes
 
