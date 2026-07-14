@@ -6,6 +6,17 @@ Sentinel Ledger starts as a Spring Boot modular monolith. Functional modules liv
 
 This choice favors local transactions and fast domain discovery. Distribution is a later response to measured needs, not an initial requirement.
 
+## Architecture drivers
+
+In priority order:
+
+1. preserve monetary and state invariants;
+2. make retries safe across concurrency and restart;
+3. represent and recover provider uncertainty;
+4. preserve immutable evidence and explain outcomes;
+5. keep the project reproducible for reviewers;
+6. add operational scale only when measured evidence requires it.
+
 ## Module boundaries
 
 | Module | Owns | May depend on |
@@ -31,7 +42,11 @@ Ledger entries are append-only. A balance may be maintained as a rebuildable pro
 
 The simulated PSP is outside the database transaction. Authorization follows a persist-call-persist workflow so the system can represent provider uncertainty instead of holding locks while waiting on the network.
 
-The PSP adapter must expose explicit results such as approved, declined, timeout/unknown, and protocol failure. Provider-specific payloads must not leak into the payment domain.
+The PSP adapter must expose explicit results such as approved, declined, timeout/unknown, and protocol failure. Provider-specific payloads must not leak into the payment domain. Deterministic test/demo controls cover timeout before processing, timeout after processing, delayed/duplicate/out-of-order callbacks, and mismatched status.
+
+## Reconciliation boundary
+
+Reconciliation is part of the financial correctness proof, not a reporting afterthought. It compares internal payment/ledger evidence with provider evidence, fingerprints mismatches, creates at most one open case per divergence, and records an append-only resolution history. It never edits prior ledger entries; financial repair uses a compensating transaction.
 
 ## Concurrency strategy
 
@@ -39,11 +54,17 @@ The first implementation will compare optimistic locking and atomic conditional 
 
 Correctness relies on database constraints and transaction semantics, not an in-memory or Redis lock.
 
+Every concurrency benchmark must run final invariant assertions. Throughput without correctness verification is not an accepted result.
+
 ## Event strategy
 
 Domain events may be used for module decoupling inside the monolith. External broker publication is deferred to the reliability phase.
 
 When RabbitMQ is introduced, a transactional outbox will persist the business change and publication intent in the same local transaction. Consumers will use an inbox or equivalent unique processing record to tolerate duplicate delivery.
+
+## Modern Java policy
+
+Modern Java features are used only where they clarify the model or produce measured operational value. Records are preferred for immutable boundary types. Sealed hierarchies may model closed outcome sets. Virtual threads are limited to suitable blocking I/O and must be measured. `ScopedValue` may propagate correlation context but is not an authorization or tenant-isolation mechanism. Preview features are not required for the baseline build.
 
 ## Authentication and authorization
 
