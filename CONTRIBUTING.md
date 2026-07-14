@@ -38,3 +38,9 @@ docs(adr): defer RabbitMQ until outbox phase
 ## Local setup
 
 Local build commands will be documented after the Spring Boot bootstrap issue lands. Until then, this repository is intentionally documentation-first.
+
+Validate the current repository documentation with:
+
+```bash
+python3 scripts/validate_docs.py
+```
