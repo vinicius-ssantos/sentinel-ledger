@@ -32,6 +32,8 @@ CANCELLED
 
 `AUTHORIZATION_UNKNOWN` is mandatory: it represents missing final evidence after a provider call, not a guessed failure. Recovery may transition it to `AUTHORIZED`, `DECLINED`, or a documented operator-visible terminal outcome.
 
+The normative command, guard, and transition table is maintained in [PAYMENT_STATE_MACHINE.md](PAYMENT_STATE_MACHINE.md). The MVP forbids new capture after the first successful refund; this avoids an ambiguous interleaving of capture and refund phases in one aggregate state.
+
 ### Authorization
 
 Represents the PSP decision and the amount available for capture. Authorization does not automatically represent a settled movement of funds.
@@ -106,4 +108,4 @@ Stable invariant identifiers and required proof levels are defined in [INVARIANT
 
 Authorization creates payment state and may create a hold representation, but capture is the first operation required to post the MVP's financial ledger entries. Refund posts a new compensating transaction.
 
-The exact chart of accounts and debit/credit direction must be documented with worked examples before ledger implementation begins.
+Ledger implementation must follow the accepted MVP chart and worked postings in [LEDGER_POSTINGS.md](LEDGER_POSTINGS.md). Persistent command identity and error behavior are defined in [IDEMPOTENCY_AND_ERRORS.md](IDEMPOTENCY_AND_ERRORS.md).
