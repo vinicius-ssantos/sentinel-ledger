@@ -8,7 +8,11 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 
 - project brief and non-goals;
 - domain model and worked payment/ledger examples;
+- invariant catalog with stable IDs and proof levels;
 - state transition table;
+- deterministic provider failure model;
+- lightweight threat model;
+- golden demo contract;
 - initial ADR register;
 - API outline and error model;
 - prioritized GitHub backlog;
@@ -16,8 +20,9 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 
 ### Exit criteria
 
-- all MVP invariants are unambiguous;
+- all MVP invariants are unambiguous and mapped to planned executable evidence;
 - authorization, capture, refund, and reconciliation examples agree;
+- unknown provider outcomes and recovery transitions are explicit;
 - unresolved decisions are tracked as issues rather than hidden assumptions.
 
 ## Phase 1 — Transactional core
@@ -29,17 +34,18 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 - PostgreSQL, Flyway, and Testcontainers;
 - Merchant and PaymentIntent models;
 - create/read payment intent API;
-- authorization workflow with simulated PSP;
+- authorization workflow with a deterministic failure-capable simulated PSP;
 - persistent idempotency;
 - OpenAPI and baseline CI.
 
 ### Exit criteria
 
-- success, decline, timeout/unknown, safe retry, and key conflict scenarios pass end to end;
+- approval, decline, timeout-before-processing, timeout-after-processing, safe retry, duplicate callback, and key conflict scenarios pass end to end;
 - no database transaction remains open during the PSP call;
+- uncertain results remain explicit until provider evidence resolves them;
 - module verification runs in CI.
 
-## Phase 2 — Ledger and concurrency
+## Phase 2 — Financial correctness and recovery
 
 ### Deliverables
 
@@ -50,16 +56,22 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 - audit evidence;
 - optimistic locking or conditional-update strategy;
 - concurrency and property-oriented tests;
-- payment timeline.
+- payment timeline;
+- provider/internal mismatch detection;
+- deduplicated reconciliation cases;
+- audited operator resolution and compensating action.
 
 ### Exit criteria
 
 - concurrent operations cannot exceed authorization or refundable value;
 - unbalanced transactions cannot be persisted;
 - corrections use compensating entries;
-- ledger state is reconstructable from immutable entries.
+- ledger state is reconstructable from immutable entries;
+- timeout-after-processing reaches a proven final state without duplicate effects;
+- repeated reconciliation creates one open case per mismatch;
+- restart preserves mismatch evidence and resolution history.
 
-## Phase 3 — Reliability and reconciliation
+## Phase 3 — Async reliability and observability
 
 ### Deliverables
 
@@ -68,7 +80,6 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 - inbox/deduplication;
 - retry with backoff and DLQ;
 - signed webhook delivery;
-- reconciliation job and operator resolution;
 - structured logs, traces, metrics, and dashboards.
 
 ### Exit criteria
@@ -76,14 +87,16 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 - process restart between commit and publication loses no event;
 - duplicate delivery applies no duplicate effect;
 - failed delivery is observable and recoverable;
-- provider mismatch produces a reconciliation case.
+- one payment is traceable across API, database, PSP, outbox, broker, webhook, and reconciliation evidence;
+- telemetry contains no secrets or unbounded business identifiers as metric labels.
 
 ## Phase 4 — Portfolio demonstration
 
 ### Deliverables
 
-- small Next.js operations UI;
-- payment timeline, ledger entries, reconciliation, and webhook views;
+- small investigation-focused Next.js operations UI;
+- connected payment, provider attempt, ledger, reconciliation, audit, and webhook views;
+- clean-checkout golden demo automation;
 - reproducible k6 report;
 - architecture and trade-off narrative;
 - economical public deployment.
@@ -92,7 +105,20 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 
 - a reviewer can understand the business problem in under one minute;
 - the demo visibly connects API operations to ledger and reconciliation evidence;
+- the six golden scenarios complete from synthetic seed data after a clean checkout;
+- every demo scenario exposes correlation, audit, and final invariant evidence;
 - every benchmark states environment, data, method, and limitations.
+
+## Portfolio completion gate
+
+The project is not called complete until all of the following are true:
+
+- the invariant catalog is linked to executable evidence;
+- the golden demo covers retry, key conflict, concurrency, provider uncertainty, compensation, reconciliation, and restart;
+- the operations UI investigates backend evidence instead of duplicating domain rules;
+- security checks and known limitations are published without compliance claims;
+- performance reports include final correctness assertions;
+- a reviewer can reproduce the result without private services or credentials.
 
 ## Deferred candidates
 
