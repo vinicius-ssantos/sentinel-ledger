@@ -8,6 +8,7 @@ Sentinel Ledger is currently a personal portfolio project. Focused discussions, 
 2. Open or reference an issue for non-trivial behavior.
 3. Explain the business invariant or failure mode being addressed.
 4. Avoid adding infrastructure without a measured requirement and ADR.
+5. Use the stable IDs in `docs/INVARIANTS.md` when correctness behavior is affected.
 
 ## Pull request expectations
 
@@ -17,11 +18,13 @@ Sentinel Ledger is currently a personal portfolio project. Focused discussions, 
 - preserve module boundaries;
 - include migration and rollback notes for persistence changes;
 - state security, concurrency, and observability impact;
+- include recovery/restart evidence when a change crosses a network or transaction boundary;
+- update the golden demo when reviewer-visible behavior changes;
 - avoid unrelated formatting or dependency changes.
 
 ## Definition of done
 
-A change is ready when its acceptance criteria pass, relevant invariants have executable tests, module verification is green, documentation matches behavior, secrets and real payment data are absent, and the PR describes trade-offs honestly.
+A change is ready when its acceptance criteria pass, relevant invariant IDs have executable evidence at the required proof levels, module verification is green, documentation and the golden demo match behavior, secrets and real payment data are absent, and the PR describes trade-offs honestly.
 
 ## Commit examples
 
