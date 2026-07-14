@@ -8,6 +8,9 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 
 - project brief and non-goals;
 - domain model and worked payment/ledger examples;
+- normative payment transition table;
+- MVP chart of accounts and balanced posting examples;
+- persistent idempotency lifecycle and RFC 9457 error catalog;
 - invariant catalog with stable IDs and proof levels;
 - state transition table;
 - deterministic provider failure model;
@@ -24,6 +27,16 @@ The roadmap is outcome-based. Dates and performance claims will be added only wh
 - authorization, capture, refund, and reconciliation examples agree;
 - unknown provider outcomes and recovery transitions are explicit;
 - unresolved decisions are tracked as issues rather than hidden assumptions.
+
+### Normative Phase 0 contracts
+
+- [Payment state machine](PAYMENT_STATE_MACHINE.md)
+- [Ledger policy and posting examples](LEDGER_POSTINGS.md)
+- [Persistent idempotency and error contract](IDEMPOTENCY_AND_ERRORS.md)
+- [Engineering invariant catalog](INVARIANTS.md)
+- [Failure model](FAILURE_MODEL.md)
+- [Threat model](THREAT_MODEL.md)
+- [Golden demo contract](DEMO_RUNBOOK.md)
 
 ## Phase 1 — Transactional core
 
