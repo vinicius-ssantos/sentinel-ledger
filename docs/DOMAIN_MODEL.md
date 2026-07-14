@@ -19,16 +19,18 @@ Initial states:
 ```text
 CREATED
 AUTHORIZATION_PENDING
+AUTHORIZATION_UNKNOWN
 AUTHORIZED
 PARTIALLY_CAPTURED
 CAPTURED
 PARTIALLY_REFUNDED
 REFUNDED
+DECLINED
 FAILED
 CANCELLED
 ```
 
-An explicit uncertain provider result may add `AUTHORIZATION_UNKNOWN` after the first integration spike.
+`AUTHORIZATION_UNKNOWN` is mandatory: it represents missing final evidence after a provider call, not a guessed failure. Recovery may transition it to `AUTHORIZED`, `DECLINED`, or a documented operator-visible terminal outcome.
 
 ### Authorization
 
@@ -58,6 +60,17 @@ Uniquely identified by merchant, operation, and key. Stores a canonical request 
 
 Represents a detected mismatch between internal state and the simulated PSP. Resolution records an actor, reason, and action without erasing original evidence.
 
+Initial lifecycle:
+
+```text
+OPEN
+INVESTIGATING
+RESOLVED
+IGNORED_WITH_REASON
+```
+
+A deterministic mismatch fingerprint prevents repeated runs from creating duplicate open cases.
+
 ### AuditEvent
 
 Records who performed a sensitive action, what changed, when it happened, which resource was affected, and why.
@@ -81,7 +94,13 @@ The constructor must reject negative amounts where the operation requires a posi
 - a posted ledger transaction is immutable;
 - idempotency key reuse with a different canonical request is rejected;
 - duplicate provider callbacks do not apply effects twice;
+- uncertain provider outcomes remain explicit until evidence resolves them;
+- repeated detection does not duplicate an open reconciliation case;
+- resolution preserves evidence, actor, reason, and resulting compensating action;
+- the balance projection can be rebuilt from authoritative ledger entries;
 - only allowed state transitions succeed.
+
+Stable invariant identifiers and required proof levels are defined in [INVARIANTS.md](INVARIANTS.md).
 
 ## Initial ledger policy
 
