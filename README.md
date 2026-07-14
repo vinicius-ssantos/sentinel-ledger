@@ -13,6 +13,8 @@ Sentinel Ledger is a portfolio project about the engineering challenges behind r
 
 The system starts as a **modular monolith**. Its goal is to demonstrate domain modeling, transaction boundaries, concurrency control, failure recovery, security, testing, and observable business behavior without introducing distributed infrastructure before the domain requires it.
 
+> **Engineering claim:** even under retry, concurrency, timeout, restart, duplicate delivery, and provider divergence, the system preserves financial truth and can explain exactly what happened.
+
 ## Why this project exists
 
 A payment API is easy to prototype when every request succeeds exactly once. A reliable system must also remain correct when:
@@ -41,12 +43,13 @@ The first usable version is constrained to:
 - one currency: BRL;
 - one simulated PSP;
 - payment intent creation and authorization;
+- explicit recovery of uncertain provider outcomes;
 - full and partial capture;
 - full and partial refund;
 - append-only double-entry ledger;
 - persistent idempotency;
 - audit trail;
-- simple reconciliation;
+- mismatch detection and auditable reconciliation;
 - payment timeline.
 
 ### Explicit non-goals
@@ -57,16 +60,22 @@ These capabilities may be evaluated later only through measured requirements and
 
 ## Core domain invariants
 
-1. A capture cannot exceed the authorized amount.
-2. The sum of successful captures cannot exceed the authorized amount.
-3. The sum of successful refunds cannot exceed the net captured amount.
-4. Every posted ledger transaction must be balanced.
+1. The total successful capture cannot exceed the authorized amount.
+2. The total successful refund cannot exceed captured value not previously refunded.
+3. Only explicitly allowed payment state transitions may occur.
+4. Every posted ledger transaction has equal debit and credit totals.
 5. Ledger entries are append-only and are never updated or deleted.
 6. Corrections are represented by compensating transactions.
-7. The same idempotency key and request payload cannot produce two effects.
-8. Reusing an idempotency key with a different payload is rejected.
-9. Only explicitly allowed payment state transitions may occur.
-10. Duplicate external events cannot reapply a business effect.
+7. Balance projections can be rebuilt from authoritative ledger entries.
+8. The same idempotency key and request payload cannot produce two effects.
+9. Reusing an idempotency key with a different payload is rejected.
+10. Provider uncertainty is represented explicitly and never guessed as success or failure.
+11. Duplicate or out-of-order provider evidence cannot reapply an effect.
+12. Repeated reconciliation cannot create duplicate open cases for the same mismatch.
+13. Reconciliation resolution preserves original evidence, actor, and reason.
+14. Every sensitive business or operator command leaves redacted audit evidence.
+
+Each rule has a stable identifier, enforcement point, and proof requirement in [docs/INVARIANTS.md](docs/INVARIANTS.md).
 
 ## Architecture
 
@@ -106,25 +115,24 @@ Spring Modulith will verify dependencies, reject cycles and access to internal p
 
 ## Critical transaction boundary
 
-External PSP calls must not run while a PostgreSQL transaction remains open.
+External PSP calls must not run while a PostgreSQL transaction remains open, and a transport timeout must not be translated directly into a business failure.
 
 ```text
-Persist AUTHORIZATION_PENDING
+Persist AUTHORIZATION_PENDING and commit
         |
         v
-Commit the local transaction
+Call the simulated PSP outside the transaction
         |
         v
-Call the simulated PSP
+Persist AUTHORIZED, DECLINED, or AUTHORIZATION_UNKNOWN
         |
         v
-Persist AUTHORIZED, DECLINED, or UNKNOWN
-        |
-        v
-Recover UNKNOWN through status lookup or callback
+Recover uncertainty through status lookup, callback, or reconciliation
 ```
 
 Capture and refund effects will update payment state, post balanced ledger entries, and record audit evidence in one local transaction.
+
+The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL.md](docs/FAILURE_MODEL.md).
 
 ## Initial API outline
 
@@ -141,6 +149,21 @@ Capture and refund effects will update payment state, post balanced ledger entri
 | `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution |
 
 All mutating operations will require an `Idempotency-Key` header.
+
+## Portfolio acceptance bar
+
+The project is considered portfolio-ready only when a clean checkout can reproduce this evidence:
+
+| Demonstration | Required result |
+| --- | --- |
+| Same request submitted three times | One effect and a replayable stored outcome |
+| Same key reused with a modified request | Stable conflict and no second effect |
+| At least twenty concurrent captures | Captured total never exceeds authorization |
+| PSP processes authorization but loses the response | Explicit uncertain state followed by evidence-based recovery |
+| Partial refund | New balanced compensating transaction; prior entries unchanged |
+| Provider/internal mismatch followed by restart | One durable case with preserved evidence and audited resolution |
+
+See [docs/DEMO_RUNBOOK.md](docs/DEMO_RUNBOOK.md) for the golden demo contract.
 
 ## Technology strategy
 
@@ -159,17 +182,17 @@ Records will be preferred for commands, responses, events, and value objects. Se
 
 ## Testing strategy
 
-Quality is defined by proven behavior, not by a target test count or coverage percentage.
+Quality is defined by proven behavior, not by a target test count or coverage percentage. Every implemented invariant must be traced to domain, PostgreSQL, concurrency, recovery, or demonstration evidence as appropriate.
 
-The minimum portfolio includes state and monetary invariant tests, balanced-ledger property tests, PostgreSQL integration tests, simulated PSP failure scenarios, concurrent capture and refund tests, idempotency collision and replay tests, module boundary tests, API contract tests, and a reproducible k6 scenario.
+The minimum portfolio includes state and monetary invariant tests, balanced-ledger property-oriented tests, PostgreSQL integration tests, simulated PSP failure scenarios, concurrent capture and refund tests, idempotency collision/replay/restart tests, reconciliation deduplication tests, module boundary tests, API contract tests, and a reproducible k6 scenario.
 
-The required concurrency proof will run at least twenty simultaneous capture requests against one authorized payment and prove that the final captured total never exceeds the authorization.
+The required concurrency proof will run at least twenty simultaneous capture requests against one authorized payment and prove that the final captured total never exceeds the authorization. Performance results are invalid if the final invariant checks are omitted.
 
 ## Observability and security
 
 Telemetry will correlate API, database, simulated PSP, and future broker operations with business identifiers. No latency or throughput promise will be published without a reproducible benchmark environment.
 
-The project will never store PAN, CVV, real card tokens, or production payment credentials. Merchant identity must come from authenticated context, never from an untrusted header alone. Sensitive operator actions will be authorized and audited.
+The project will never store PAN, CVV, real card tokens, or production payment credentials. Merchant identity must come from authenticated context, never from an untrusted header alone. Sensitive operator actions will be separately authorized, confirmed, and audited. The lightweight threat model is maintained in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## Delivery roadmap
 
@@ -177,9 +200,9 @@ The project will never store PAN, CVV, real card tokens, or production payment c
 | --- | --- |
 | 0 — Specification | Domain model, invariants, ADRs, API outline, acceptance criteria |
 | 1 — Transactional core | Payment intent, authorization, persistent idempotency, simulated PSP |
-| 2 — Ledger and concurrency | Capture, refund, double-entry ledger, audit, concurrency proof |
-| 3 — Reliability | Transactional outbox, RabbitMQ, inbox, retries, DLQ, webhooks, reconciliation |
-| 4 — Demonstration | Operations UI, dashboards, benchmark report, public deployment |
+| 2 — Financial correctness and recovery | Capture, refund, double-entry ledger, audit, concurrency proof, reconciliation |
+| 3 — Async reliability and observability | Transactional outbox, RabbitMQ, inbox, retries, DLQ, signed webhooks, telemetry |
+| 4 — Portfolio demonstration | Investigation-focused Ops UI, golden demo, benchmark report, public deployment |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for exit criteria and [docs/adr](docs/adr) for the decision register.
 
@@ -188,6 +211,10 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for exit criteria and [docs/adr](docs/adr
 - [Project brief](docs/PROJECT_BRIEF.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Domain model](docs/DOMAIN_MODEL.md)
+- [Engineering invariants](docs/INVARIANTS.md)
+- [Failure model](docs/FAILURE_MODEL.md)
+- [Threat model](docs/THREAT_MODEL.md)
+- [Golden demo runbook](docs/DEMO_RUNBOOK.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Architectural decisions](docs/adr/README.md)
 - [Contributing](CONTRIBUTING.md)
