@@ -19,6 +19,7 @@ This document is the correctness contract for Sentinel Ledger. An invariant is n
 | `PAY-001` | Total successful capture never exceeds the authorized amount | Payment aggregate plus optimistic versioning or conditional update | Domain, PostgreSQL, concurrency |
 | `PAY-002` | Total successful refund never exceeds the captured amount not previously refunded | Payment aggregate plus database concurrency control | Domain, PostgreSQL, concurrency |
 | `PAY-003` | Only documented payment state transitions can succeed | Explicit transition policy | Parameterized transition tests |
+| `PAY-004` | The MVP accepts no new capture after the first successful refund | Transition policy and aggregate guard | Domain, API contract, and concurrency tests |
 | `LED-001` | Every posted ledger transaction has equal debit and credit totals | Ledger posting boundary validates the complete transaction before persistence | Property-oriented and PostgreSQL tests |
 | `LED-002` | Posted entries are immutable | Append-only repository/API policy and restricted update/delete paths | Integration and security tests |
 | `LED-003` | Financial correction creates a compensating transaction | Ledger command model | Worked examples and integration tests |
@@ -42,3 +43,5 @@ A pull request that changes one of these rules must:
 5. add an ADR when the enforcement strategy changes materially.
 
 Coverage percentage alone is not evidence that an invariant holds.
+
+The normative transition table is [PAYMENT_STATE_MACHINE.md](PAYMENT_STATE_MACHINE.md), ledger examples are [LEDGER_POSTINGS.md](LEDGER_POSTINGS.md), and retry/error semantics are [IDEMPOTENCY_AND_ERRORS.md](IDEMPOTENCY_AND_ERRORS.md).
