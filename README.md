@@ -208,6 +208,10 @@ The project will never store PAN, CVV, real card tokens, or production payment c
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for exit criteria and [docs/adr](docs/adr) for the decision register.
 
+## Coding-agent instructions
+
+Repository-wide instructions for coding agents live in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) imports that shared source for Claude Code and contains only Claude-specific guidance. Personal Claude Code preferences belong in the ignored `CLAUDE.local.md` file.
+
 ## Documentation
 
 - [Project brief](docs/PROJECT_BRIEF.md)
@@ -222,6 +226,8 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for exit criteria and [docs/adr](docs/adr
 - [Golden demo runbook](docs/DEMO_RUNBOOK.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Architectural decisions](docs/adr/README.md)
+- [Repository instructions for coding agents](AGENTS.md)
+- [Claude Code adapter](CLAUDE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 
