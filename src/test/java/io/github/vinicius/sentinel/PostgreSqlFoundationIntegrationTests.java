@@ -21,13 +21,13 @@ class PostgreSqlFoundationIntegrationTests {
 
 	@Test
 	void runsAgainstPostgreSqlAndAppliesTheBaselineMigration() {
-		String databaseProduct = jdbcTemplate.execute(connection -> connection.getMetaData().getDatabaseProductName());
+		String databaseProduct = jdbcTemplate.queryForObject("select version()", String.class);
 		Integer appliedBaseline = jdbcTemplate.queryForObject(
 			"select count(*) from flyway_schema_history where version = '1' and success",
 			Integer.class
 		);
 
-		assertThat(databaseProduct).isEqualTo("PostgreSQL");
+		assertThat(databaseProduct).startsWith("PostgreSQL");
 		assertThat(appliedBaseline).isEqualTo(1);
 		assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
 	}
