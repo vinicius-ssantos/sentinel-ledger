@@ -1,0 +1,11 @@
+-- Sentinel Ledger schema baseline.
+--
+-- Versioned migrations live in this directory and follow
+-- V<version>__<snake_case_description>.sql.
+-- Each future migration must name its owning functional module in the
+-- description, for example V2__payments_create_payment_intents.sql.
+--
+-- The baseline is intentionally empty: Flyway's schema history table is the
+-- authoritative proof that a new PostgreSQL database was initialized and
+-- validated before domain tables are introduced.
+SELECT 1;
