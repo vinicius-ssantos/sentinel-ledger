@@ -21,8 +21,9 @@ In priority order:
 
 | Module | Owns | May depend on |
 | --- | --- | --- |
-| `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | merchant API, ledger API, idempotency API, audit API |
-| `ledger` | Ledger accounts, transactions, entries, projections | audit API |
+| `money` | Immutable monetary amounts and explicit currency metadata | JDK only |
+| `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | money API, merchant API, ledger API, idempotency API, audit API |
+| `ledger` | Ledger accounts, transactions, entries, projections | money API, audit API |
 | `reconciliation` | Cases, mismatch rules, resolutions | payments API, ledger API, PSP port, audit API |
 | `idempotency` | Keys, request hashes, stored outcomes | shared technical primitives only |
 | `integration.psp` | Provider requests, results, callbacks, and the simulated provider adapter | payments PSP port and public events |
@@ -31,6 +32,8 @@ In priority order:
 | `observability` | Cross-cutting telemetry configuration | public events and technical adapters |
 
 Spring Modulith 2.1 verification runs as part of `mvn verify` and rejects module cycles, access to another module's internal packages, and dependencies not listed by each module's `@ApplicationModule` policy. Detection is explicitly annotated so `integration.psp` remains a first-class module instead of being folded into an intermediate `integration` package. Module APIs belong in their root packages; implementation details belong in subpackages such as `internal`.
+
+The `money` module is a deliberately small shared domain kernel, not a generic utility package. It owns only monetary representation and exact arithmetic so payments and ledger can share one invariant-preserving type without depending on each other.
 
 ArchUnit remains available for future rules that complement rather than duplicate Spring Modulith verification.
 
