@@ -3,7 +3,7 @@ package io.github.vinicius.sentinel.money;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatArithmeticException;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -53,13 +53,13 @@ class MoneyTests {
 
 	@Test
 	void failsFastWhenLongArithmeticWouldOverflow() {
-		assertThatArithmeticException().isThrownBy(() ->
+		assertThatExceptionOfType(ArithmeticException.class).isThrownBy(() ->
 			Money.ofMinor(Long.MAX_VALUE, Currency.BRL).add(Money.ofMinor(1, Currency.BRL))
 		);
-		assertThatArithmeticException().isThrownBy(() ->
+		assertThatExceptionOfType(ArithmeticException.class).isThrownBy(() ->
 			Money.ofMinor(Long.MIN_VALUE, Currency.BRL).subtract(Money.ofMinor(1, Currency.BRL))
 		);
-		assertThatArithmeticException().isThrownBy(() ->
+		assertThatExceptionOfType(ArithmeticException.class).isThrownBy(() ->
 			Money.ofMinor(Long.MIN_VALUE, Currency.BRL).negate()
 		);
 	}
