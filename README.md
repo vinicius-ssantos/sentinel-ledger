@@ -2,7 +2,7 @@
 
 > Payment orchestration with an immutable double-entry ledger, persistent idempotency, reconciliation, and production-grade observability.
 
-[![Status: Phase 1](https://img.shields.io/badge/status-phase%201%20bootstrap-1f6feb)](#project-status)
+[![Status: Phase 1](https://img.shields.io/badge/status-phase%201%20modules-1f6feb)](#project-status)
 [![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk)](#technology-strategy)
 [![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot)](#technology-strategy)
 [![Architecture: Modular Monolith](https://img.shields.io/badge/architecture-modular%20monolith-1f6feb)](#architecture)
@@ -31,9 +31,9 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 ## Project status
 
-**Current phase: Phase 1 executable foundation.**
+**Current phase: Phase 1 executable modular foundation.**
 
-The repository now contains the smallest executable Java 25 and Spring Boot 4.1 foundation, including a reproducible Maven wrapper, a local health endpoint, automated build verification, and documentation checks. Payment workflows, persistence, module boundaries, and production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment workflows, PostgreSQL persistence, and production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -65,6 +65,8 @@ curl http://localhost:8080/actuator/health
 ```
 
 PowerShell users can run `Invoke-RestMethod http://localhost:8080/actuator/health`. The expected status is `UP`. No business API endpoints exist yet.
+
+`./mvnw verify` also validates the Spring Modulith structure and generates diagrams plus module canvases under `target/spring-modulith-docs`.
 
 ## MVP scope
 

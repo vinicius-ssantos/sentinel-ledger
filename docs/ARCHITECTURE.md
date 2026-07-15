@@ -21,16 +21,18 @@ In priority order:
 
 | Module | Owns | May depend on |
 | --- | --- | --- |
-| `payments` | Payment intents, authorizations, captures, refunds | merchant API, PSP port, ledger API, idempotency API, audit API |
+| `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | merchant API, ledger API, idempotency API, audit API |
 | `ledger` | Ledger accounts, transactions, entries, projections | audit API |
 | `reconciliation` | Cases, mismatch rules, resolutions | payments API, ledger API, PSP port, audit API |
 | `idempotency` | Keys, request hashes, stored outcomes | shared technical primitives only |
-| `integration.psp` | Provider requests, results, callbacks | payments public commands/events |
+| `integration.psp` | Provider requests, results, callbacks, and the simulated provider adapter | payments PSP port and public events |
 | `merchant` | Merchant configuration and access context | shared technical primitives only |
 | `audit` | Audit events and actor evidence | shared technical primitives only |
 | `observability` | Cross-cutting telemetry configuration | public events and technical adapters |
 
-Spring Modulith verification and ArchUnit tests will reject cycles, internal package access, and dependencies not listed by the module policy.
+Spring Modulith 2.1 verification runs as part of `mvn verify` and rejects module cycles, access to another module's internal packages, and dependencies not listed by each module's `@ApplicationModule` policy. Detection is explicitly annotated so `integration.psp` remains a first-class module instead of being folded into an intermediate `integration` package. Module APIs belong in their root packages; implementation details belong in subpackages such as `internal`.
+
+ArchUnit remains available for future rules that complement rather than duplicate Spring Modulith verification.
 
 ## Persistence boundaries
 
