@@ -4,6 +4,6 @@
 @org.springframework.modulith.ApplicationModule(
 	id = "ledger",
 	displayName = "Ledger",
-	allowedDependencies = "audit"
+	allowedDependencies = { "money", "audit" }
 )
 package io.github.vinicius.sentinel.ledger;
