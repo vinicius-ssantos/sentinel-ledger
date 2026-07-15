@@ -4,7 +4,7 @@
 
 This file is the durable, repository-wide instruction source for coding agents working on Sentinel Ledger. Keep it concise, actionable, and aligned with the executable system. More specific instructions may be added beside a future module only when that module has stable conventions that genuinely differ from these rules.
 
-Sentinel Ledger is currently in the specification and architectural-foundation phase. Do not claim that application code, tests, CI, deployment, or benchmark evidence exists until it is implemented and reproducible.
+Sentinel Ledger is in Phase 1 and has an executable Java 25 and Spring Boot 4.1 foundation. Do not claim that payment workflows, persistence, module enforcement, deployment, or benchmark evidence exists until each is implemented and reproducible.
 
 ## Source of truth
 
@@ -68,14 +68,20 @@ Every behavior change must prove the affected invariant at the levels required b
 - Trace important tests to stable invariant IDs in names, display names, or nearby documentation.
 - Run the narrowest relevant checks while iterating, then the complete verification command before handoff.
 
-There is no application build in the current documentation-only phase. Until the bootstrap issue lands, verify repository documentation with:
+Run the complete application verification before handoff:
+
+```bash
+./mvnw verify
+```
+
+Also verify documentation and repository instruction contracts with:
 
 ```bash
 git diff --check
 python3 scripts/validate_docs.py
 ```
 
-The validator checks trailing whitespace, relative Markdown links, the `CLAUDE.md` import, the ignored local Claude file, and the agent-instruction size limit. Once the Maven wrapper exists, `./mvnw verify` becomes the canonical full application check and this section must be updated in the same change.
+The validator checks trailing whitespace, relative Markdown links, the `CLAUDE.md` import, the ignored local Claude file, and the agent-instruction size limit.
 
 ## Contract and documentation changes
 

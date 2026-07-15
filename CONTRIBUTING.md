@@ -37,9 +37,19 @@ docs(adr): defer RabbitMQ until outbox phase
 
 ## Local setup
 
-Local build commands will be documented after the Spring Boot bootstrap issue lands. Until then, this repository is intentionally documentation-first.
+Install JDK 25 and confirm that `java -version` resolves to that JDK. Docker and external services are not required for the current bootstrap.
 
-Validate the current repository documentation with:
+Run the complete application verification with the Maven wrapper:
+
+```bash
+./mvnw verify
+```
+
+On Windows, use `mvnw.cmd verify`. The first invocation downloads Maven 3.9.16 and the project dependencies.
+
+Run the application locally with `./mvnw spring-boot:run` or `mvnw.cmd spring-boot:run`, then check `http://localhost:8080/actuator/health`.
+
+Validate repository documentation separately with:
 
 ```bash
 python3 scripts/validate_docs.py

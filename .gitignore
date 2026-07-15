@@ -25,3 +25,15 @@ replay_pid*
 
 # Claude Code local instructions
 CLAUDE.local.md
+
+# Maven build output and local metadata
+target/
+.mvn/timing.properties
+
+# IDE metadata
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/

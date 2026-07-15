@@ -2,7 +2,7 @@
 
 > Payment orchestration with an immutable double-entry ledger, persistent idempotency, reconciliation, and production-grade observability.
 
-[![Status: Planning](https://img.shields.io/badge/status-planning-6f42c1)](#project-status)
+[![Status: Phase 1](https://img.shields.io/badge/status-phase%201%20bootstrap-1f6feb)](#project-status)
 [![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk)](#technology-strategy)
 [![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot)](#technology-strategy)
 [![Architecture: Modular Monolith](https://img.shields.io/badge/architecture-modular%20monolith-1f6feb)](#architecture)
@@ -31,9 +31,40 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 ## Project status
 
-**Current phase: specification and architectural foundation.**
+**Current phase: Phase 1 executable foundation.**
 
-No production implementation is claimed yet. The initial milestone closes the domain rules, architectural decisions, API outline, acceptance criteria, and delivery plan before the Spring Boot codebase is generated.
+The repository now contains the smallest executable Java 25 and Spring Boot 4.1 foundation, including a reproducible Maven wrapper, a local health endpoint, automated build verification, and documentation checks. Payment workflows, persistence, module boundaries, and production-readiness claims remain intentionally unimplemented.
+
+## Local development
+
+### Prerequisites
+
+- JDK 25, selected by `.java-version` when supported by your version manager;
+- Git.
+
+Docker and external services are not required for the current bootstrap. The first Maven wrapper invocation downloads Maven 3.9.16 and the project dependencies.
+
+On Linux or macOS, verify and run the application with:
+
+```bash
+./mvnw verify
+./mvnw spring-boot:run
+```
+
+On Windows, use:
+
+```powershell
+mvnw.cmd verify
+mvnw.cmd spring-boot:run
+```
+
+With the application running, verify its local health endpoint:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+PowerShell users can run `Invoke-RestMethod http://localhost:8080/actuator/health`. The expected status is `UP`. No business API endpoints exist yet.
 
 ## MVP scope
 
@@ -210,7 +241,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for exit criteria and [docs/adr](docs/adr
 
 ## Coding-agent instructions
 
-Repository-wide instructions for coding agents live in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) imports that shared source for Claude Code and contains only Claude-specific guidance. Personal Claude Code preferences belong in the ignored `CLAUDE.local.md` file. Run `python3 scripts/validate_docs.py` to verify the documentation and instruction-file contract locally; the same check runs in GitHub Actions.
+Repository-wide instructions for coding agents live in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) imports that shared source for Claude Code and contains only Claude-specific guidance. Personal Claude Code preferences belong in the ignored `CLAUDE.local.md` file. Run `./mvnw verify` for the canonical application build and `python3 scripts/validate_docs.py` for the documentation and instruction-file contract; both checks run in GitHub Actions.
 
 ## Documentation
 
