@@ -40,14 +40,16 @@ The repository contains an executable Java 25 and Spring Boot 4.1 foundation wit
 ### Prerequisites
 
 - JDK 25, selected by `.java-version` when supported by your version manager;
-- Git.
+- Git;
+- Docker with Compose support.
 
-Docker and external services are not required for the current bootstrap. The first Maven wrapper invocation downloads Maven 3.9.16 and the project dependencies.
+Integration tests start a real PostgreSQL container through Testcontainers. Running the application locally uses the PostgreSQL service declared in `compose.yaml`. The default `sentinel` credentials are development-only and can be overridden with `SENTINEL_DB_*` environment variables.
 
 On Linux or macOS, verify and run the application with:
 
 ```bash
 ./mvnw verify
+docker compose up -d postgres
 ./mvnw spring-boot:run
 ```
 
@@ -55,8 +57,11 @@ On Windows, use:
 
 ```powershell
 mvnw.cmd verify
+docker compose up -d postgres
 mvnw.cmd spring-boot:run
 ```
+
+`verify` requires a running Docker engine but does not require the Compose database because Testcontainers creates an isolated PostgreSQL instance. To reset the local development database, run `docker compose down -v` and start it again. Check container health with `docker compose ps` and inspect startup failures with `docker compose logs postgres`.
 
 With the application running, verify its local health endpoint:
 
@@ -66,7 +71,9 @@ curl http://localhost:8080/actuator/health
 
 PowerShell users can run `Invoke-RestMethod http://localhost:8080/actuator/health`. The expected status is `UP`. No business API endpoints exist yet.
 
-`./mvnw verify` also validates the Spring Modulith structure and generates diagrams plus module canvases under `target/spring-modulith-docs`.
+`./mvnw verify` also validates the Spring Modulith structure, starts PostgreSQL integration tests, applies and validates Flyway migrations from an empty database, and generates diagrams plus module canvases under `target/spring-modulith-docs`.
+
+Flyway migrations live under `src/main/resources/db/migration` and follow `V<version>__<snake_case_description>.sql`. After the baseline, migration descriptions must include the owning module, for example `V2__payments_create_payment_intents.sql`. Existing versioned migrations are immutable after merge; corrections use a new migration.
 
 ## MVP scope
 
