@@ -34,6 +34,10 @@ CANCELLED
 
 The normative command, guard, and transition table is maintained in [PAYMENT_STATE_MACHINE.md](PAYMENT_STATE_MACHINE.md). The MVP forbids new capture after the first successful refund; this avoids an ambiguous interleaving of capture and refund phases in one aggregate state.
 
+The pure-Java `PaymentIntent` aggregate owns the state, authorized amount, captured total, refunded total, merchant identity, timestamps, and optimistic version. Applied commands increment the version and append an infrastructure-neutral `PaymentIntentEvent`; denied commands return a `PaymentIntentDecision` with a stable `PaymentIntentErrorCode` and do not mutate state, totals, timestamps, version, or pending events.
+
+Persistence adapters will map the aggregate version to an optimistic concurrency mechanism later. The domain model deliberately contains no JPA annotations. Rehydration validates that state and financial totals agree and does not re-emit historical events.
+
 ### Authorization
 
 Represents the PSP decision and the amount available for capture. Authorization does not automatically represent a settled movement of funds.
