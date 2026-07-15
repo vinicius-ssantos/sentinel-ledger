@@ -21,11 +21,11 @@ In priority order:
 
 | Module | Owns | May depend on |
 | --- | --- | --- |
-| `payments` | Payment intents, authorizations, captures, refunds | merchant API, PSP port, ledger API, idempotency API, audit API |
+| `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | merchant API, ledger API, idempotency API, audit API |
 | `ledger` | Ledger accounts, transactions, entries, projections | audit API |
 | `reconciliation` | Cases, mismatch rules, resolutions | payments API, ledger API, PSP port, audit API |
 | `idempotency` | Keys, request hashes, stored outcomes | shared technical primitives only |
-| `integration.psp` | Provider requests, results, callbacks | payments public commands/events |
+| `integration.psp` | Provider requests, results, callbacks, and the simulated provider adapter | payments PSP port and public events |
 | `merchant` | Merchant configuration and access context | shared technical primitives only |
 | `audit` | Audit events and actor evidence | shared technical primitives only |
 | `observability` | Cross-cutting telemetry configuration | public events and technical adapters |
