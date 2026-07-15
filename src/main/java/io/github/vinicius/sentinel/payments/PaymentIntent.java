@@ -261,6 +261,12 @@ public final class PaymentIntent {
 				"event timestamp must not be before the aggregate update timestamp"
 			);
 		}
+		if (version == Long.MAX_VALUE) {
+			return PaymentIntentDecision.denied(
+				PaymentIntentErrorCode.VERSION_EXHAUSTED,
+				"aggregate version cannot advance beyond Long.MAX_VALUE"
+			);
+		}
 		return apply(eventType, target, eventAmount, occurredAt);
 	}
 
@@ -297,6 +303,12 @@ public final class PaymentIntent {
 			return PaymentIntentDecision.denied(
 				PaymentIntentErrorCode.NON_MONOTONIC_TIMESTAMP,
 				"event timestamp must not be before the aggregate update timestamp"
+			);
+		}
+		if (version == Long.MAX_VALUE) {
+			return PaymentIntentDecision.denied(
+				PaymentIntentErrorCode.VERSION_EXHAUSTED,
+				"aggregate version cannot advance beyond Long.MAX_VALUE"
 			);
 		}
 		return null;
