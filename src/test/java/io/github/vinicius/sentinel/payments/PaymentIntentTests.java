@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class PaymentIntentTests {
@@ -218,9 +219,42 @@ class PaymentIntentTests {
 
 		assertThat(drained).hasSize(2);
 		assertThat(intent.pendingEvents()).isEmpty();
+		assertThatExceptionOfType(UnsupportedOperationException.class)
+			.isThrownBy(drained::clear);
+	}
+
+	@Test
+	void rejectsNonPositiveIntentAmounts() {
 		assertThatIllegalArgumentException().isThrownBy(() ->
 			PaymentIntent.create(PAYMENT_ID, MERCHANT_ID, Money.zero(Currency.BRL), CREATED_AT)
 		);
+	}
+
+	@Test
+	void deniesCommandsBeforeAnExhaustedVersionCanPartiallyMutateState() {
+		PaymentIntent restored = PaymentIntent.restore(
+			PAYMENT_ID,
+			MERCHANT_ID,
+			TOTAL,
+			PaymentIntentState.AUTHORIZED,
+			Money.zero(Currency.BRL),
+			Money.zero(Currency.BRL),
+			Long.MAX_VALUE,
+			CREATED_AT,
+			CREATED_AT.plusSeconds(20)
+		);
+
+		PaymentIntentDecision decision = restored.capture(
+			Money.positive(1_000, Currency.BRL),
+			CREATED_AT.plusSeconds(21)
+		);
+
+		assertThat(decision.wasApplied()).isFalse();
+		assertThat(decision.errorCode()).isEqualTo(PaymentIntentErrorCode.VERSION_EXHAUSTED);
+		assertThat(restored.state()).isEqualTo(PaymentIntentState.AUTHORIZED);
+		assertThat(restored.capturedAmount()).isEqualTo(Money.zero(Currency.BRL));
+		assertThat(restored.version()).isEqualTo(Long.MAX_VALUE);
+		assertThat(restored.pendingEvents()).isEmpty();
 	}
 
 	@Test
