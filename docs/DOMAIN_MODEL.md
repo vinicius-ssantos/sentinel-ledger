@@ -79,13 +79,40 @@ Records who performed a sensitive action, what changed, when it happened, which 
 
 ## Money representation
 
-The BRL-only MVP uses integer minor units:
+The `money` module owns an immutable `Money` value object backed by a signed `long` in minor units and a `Currency` value containing an uppercase three-letter code plus explicit fraction digits. No monetary path uses `double` or `float`.
 
 ```java
-public record Money(long amountInMinorUnits, Currency currency) {}
+Money amount = Money.positive(12_50, Currency.BRL); // BRL 12.50
+Money delta = Money.ofMinor(-2_00, Currency.BRL);   // signed ledger/reconciliation delta
 ```
 
-The constructor must reject negative amounts where the operation requires a positive value. Currency-specific scale and a possible move to `BigDecimal` will be reconsidered before multi-currency support.
+The base value object accepts signed amounts because ledger calculations, differences, and compensating effects may be negative. Operation boundaries select the required factory explicitly:
+
+- `positive(...)` rejects zero and negative amounts;
+- `nonNegative(...)` accepts zero but rejects negative amounts;
+- `zero(...)` expresses an intentional zero;
+- `ofMinor(...)` accepts a signed value for calculations and evidence.
+
+Addition, subtraction, negation, and comparison require equal currencies. A mismatch throws `CurrencyMismatchException`. Arithmetic delegates to `Math.addExact`, `Math.subtractExact`, and `Math.negateExact`, so overflow fails instead of wrapping silently.
+
+The product MVP accepts BRL at payment API boundaries. The value object can represent another validated currency code so cross-currency operations remain detectable and testable; this does not make the MVP multi-currency.
+
+### API boundary contract
+
+API DTOs must not expose the domain record directly. Monetary values use a decimal string containing integer minor units plus the ISO-style currency code:
+
+```json
+{
+  "amountInMinorUnits": "1250",
+  "currency": "BRL"
+}
+```
+
+The string form avoids precision loss in clients whose numeric type cannot represent every Java `long`. Decimal major-unit strings such as `"12.50"` are not mixed into this contract.
+
+### Persistence boundary contract
+
+PostgreSQL stores the amount in a `BIGINT` column and the currency code in a constrained three-character column. Fraction digits are validated by the domain currency definition; they are not inferred from a floating-point or database decimal scale. Repositories reconstruct `Money` explicitly and never persist it as `DOUBLE PRECISION`, `REAL`, or an ORM-specific serialized object.
 
 ## Mandatory invariants
 
