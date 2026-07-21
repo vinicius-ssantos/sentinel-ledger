@@ -9,7 +9,7 @@ import org.springframework.modulith.test.ApplicationModuleTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@ApplicationModuleTest
+@ApplicationModuleTest(ApplicationModuleTest.BootstrapMode.DIRECT_DEPENDENCIES)
 @Import(TestcontainersConfiguration.class)
 class PaymentsModuleIntegrationTests {
 
