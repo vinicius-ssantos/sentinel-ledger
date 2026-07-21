@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 @SpringBootTest
@@ -63,5 +64,39 @@ class JdbcPaymentIntentStoreIntegrationTests {
 	void returnsEmptyForAnUnknownPaymentIntent() {
 		assertThat(paymentIntentStore.findOwned(PaymentIntentId.generate(), new MerchantId(UUID.randomUUID())))
 			.isEmpty();
+	}
+
+	@Test
+	void savingAnUpdatedAggregateOverwritesTheStoredRow() {
+		MerchantId merchantId = new MerchantId(UUID.randomUUID());
+		PaymentIntent created = PaymentIntent.create(
+			PaymentIntentId.generate(), merchantId, Money.positive(500, Currency.BRL), Instant.now()
+		);
+		paymentIntentStore.save(created);
+
+		created.startAuthorization(Instant.now());
+		paymentIntentStore.save(created);
+
+		PaymentIntent restored = paymentIntentStore.findOwned(created.id(), merchantId).orElseThrow();
+		assertThat(restored.state()).isEqualTo(PaymentIntentState.AUTHORIZATION_PENDING);
+		assertThat(restored.version()).isEqualTo(1L);
+	}
+
+	@Test
+	void savingAStaleVersionIsRejected() {
+		MerchantId merchantId = new MerchantId(UUID.randomUUID());
+		PaymentIntent created = PaymentIntent.create(
+			PaymentIntentId.generate(), merchantId, Money.positive(500, Currency.BRL), Instant.now()
+		);
+		paymentIntentStore.save(created);
+
+		PaymentIntent staleCopy = paymentIntentStore.findOwned(created.id(), merchantId).orElseThrow();
+		created.startAuthorization(Instant.now());
+		paymentIntentStore.save(created);
+
+		staleCopy.cancel(Instant.now());
+
+		assertThatThrownBy(() -> paymentIntentStore.save(staleCopy))
+			.isInstanceOf(OptimisticLockException.class);
 	}
 }

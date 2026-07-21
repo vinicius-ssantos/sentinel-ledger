@@ -3,6 +3,7 @@ package io.github.vinicius.sentinel.payments.internal;
 import io.github.vinicius.sentinel.merchant.MerchantId;
 import io.github.vinicius.sentinel.money.Currency;
 import io.github.vinicius.sentinel.money.Money;
+import io.github.vinicius.sentinel.payments.OptimisticLockException;
 import io.github.vinicius.sentinel.payments.PaymentIntent;
 import io.github.vinicius.sentinel.payments.PaymentIntentId;
 import io.github.vinicius.sentinel.payments.PaymentIntentState;
@@ -27,7 +28,7 @@ class JdbcPaymentIntentStore implements PaymentIntentStore {
 
 	@Override
 	public void save(PaymentIntent paymentIntent) {
-		jdbcClient.sql("""
+		int affected = jdbcClient.sql("""
 				INSERT INTO payment_intents (
 					id, merchant_id, amount_minor, currency_code, currency_fraction_digits,
 					state, captured_amount_minor, refunded_amount_minor, aggregate_version,
@@ -37,6 +38,13 @@ class JdbcPaymentIntentStore implements PaymentIntentStore {
 					:state, :capturedAmountMinor, :refundedAmountMinor, :aggregateVersion,
 					:createdAt, :updatedAt
 				)
+				ON CONFLICT (id) DO UPDATE SET
+					state = EXCLUDED.state,
+					captured_amount_minor = EXCLUDED.captured_amount_minor,
+					refunded_amount_minor = EXCLUDED.refunded_amount_minor,
+					aggregate_version = EXCLUDED.aggregate_version,
+					updated_at = EXCLUDED.updated_at
+				WHERE payment_intents.aggregate_version = EXCLUDED.aggregate_version - 1
 				""")
 			.param("id", paymentIntent.id().value())
 			.param("merchantId", paymentIntent.merchantId().value())
@@ -50,6 +58,10 @@ class JdbcPaymentIntentStore implements PaymentIntentStore {
 			.param("createdAt", Timestamp.from(paymentIntent.createdAt()))
 			.param("updatedAt", Timestamp.from(paymentIntent.updatedAt()))
 			.update();
+
+		if (affected == 0) {
+			throw new OptimisticLockException(paymentIntent.id(), paymentIntent.version());
+		}
 	}
 
 	@Override
