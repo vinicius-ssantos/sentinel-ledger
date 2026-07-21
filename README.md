@@ -33,7 +33,7 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 **Current phase: Phase 1 executable modular foundation.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, and authorization against a deterministic simulated PSP are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call; capture, refund, ledger, and production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, and authorization against a deterministic simulated PSP are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection, but nothing calls it yet; capture, refund, and production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
