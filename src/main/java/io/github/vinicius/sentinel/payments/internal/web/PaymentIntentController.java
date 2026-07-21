@@ -6,6 +6,7 @@ import io.github.vinicius.sentinel.merchant.MerchantId;
 import io.github.vinicius.sentinel.payments.PaymentIntentId;
 import io.github.vinicius.sentinel.payments.PaymentIntentStore;
 import io.github.vinicius.sentinel.payments.internal.ApiResult;
+import io.github.vinicius.sentinel.payments.internal.AuthorizePaymentIntentService;
 import io.github.vinicius.sentinel.payments.internal.PaymentIntentCommandService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -35,15 +36,18 @@ class PaymentIntentController {
 	private final PaymentIntentStore paymentIntentStore;
 	private final CurrentMerchantResolver currentMerchantResolver;
 	private final PaymentIntentCommandService paymentIntentCommandService;
+	private final AuthorizePaymentIntentService authorizePaymentIntentService;
 
 	PaymentIntentController(
 		PaymentIntentStore paymentIntentStore,
 		CurrentMerchantResolver currentMerchantResolver,
-		PaymentIntentCommandService paymentIntentCommandService
+		PaymentIntentCommandService paymentIntentCommandService,
+		AuthorizePaymentIntentService authorizePaymentIntentService
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.currentMerchantResolver = currentMerchantResolver;
 		this.paymentIntentCommandService = paymentIntentCommandService;
+		this.authorizePaymentIntentService = authorizePaymentIntentService;
 	}
 
 	@PostMapping
@@ -66,6 +70,31 @@ class PaymentIntentController {
 		ApiResult result = paymentIntentCommandService.create(
 			merchantId, idempotencyKey, request.amountInMinorUnits(), request.currency(), COLLECTION_URI
 		);
+		return toResponseEntity(result);
+	}
+
+	@PostMapping("/{id}/authorize")
+	@Operation(
+		summary = "Authorize a payment intent",
+		description = "Requests authorization from the simulated PSP outside any database transaction. "
+			+ "May return 202 with AUTHORIZATION_UNKNOWN when the provider outcome is not yet known; "
+			+ "retrying with the same Idempotency-Key recovers through provider status lookup rather than "
+			+ "repeating the call."
+	)
+	@ApiResponse(responseCode = "200", description = "Authorization reached a final state (AUTHORIZED, DECLINED, or FAILED)")
+	@ApiResponse(responseCode = "202", description = "Authorization outcome is not yet known (AUTHORIZATION_UNKNOWN)")
+	@ApiResponse(responseCode = "400", description = "Missing or invalid idempotency key")
+	@ApiResponse(responseCode = "404", description = "Payment intent absent or owned by another merchant")
+	@ApiResponse(responseCode = "409", description = "Invalid transition, idempotency key reused, or still in progress")
+	ResponseEntity<String> authorize(
+		@PathVariable UUID id,
+		@Parameter(description = "16-128 visible ASCII characters, unique per merchant and operation", required = true)
+		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKeyHeader
+	) {
+		MerchantId merchantId = currentMerchantResolver.requireCurrentMerchantId();
+		IdempotencyKey idempotencyKey = requireIdempotencyKey(idempotencyKeyHeader);
+		URI instance = URI.create("/api/v1/payment-intents/" + id + "/authorize");
+		ApiResult result = authorizePaymentIntentService.authorize(merchantId, idempotencyKey, new PaymentIntentId(id), instance);
 		return toResponseEntity(result);
 	}
 

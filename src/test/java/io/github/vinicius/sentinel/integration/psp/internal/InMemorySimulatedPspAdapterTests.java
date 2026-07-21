@@ -172,6 +172,39 @@ class InMemorySimulatedPspAdapterTests {
 		assertThat(adapter.checkStatus(attemptId)).isInstanceOf(PspAuthorizationResult.Unknown.class);
 	}
 
+	@Test
+	void programNextAttemptAppliesToWhicheverAttemptIdAuthorizeGenerates() {
+		PaymentIntentId paymentIntentId = PaymentIntentId.generate();
+		PspAuthorizationResult declined = new PspAuthorizationResult.Declined("blocked");
+		adapter.programNextAttempt(paymentIntentId, declined, declined);
+
+		PspAuthorizationRequest request = new PspAuthorizationRequest(
+			PspAttemptId.generate(), paymentIntentId, new MerchantId(UUID.randomUUID()), Money.positive(1_000, Currency.BRL)
+		);
+		PspAuthorizationResult result = adapter.authorize(request);
+
+		assertThat(result).isEqualTo(declined);
+		assertThat(adapter.checkStatus(request.attemptId())).isEqualTo(declined);
+	}
+
+	@Test
+	void programNextAttemptIsConsumedExactlyOnce() {
+		PaymentIntentId paymentIntentId = PaymentIntentId.generate();
+		PspAuthorizationResult declined = new PspAuthorizationResult.Declined("blocked");
+		adapter.programNextAttempt(paymentIntentId, declined, declined);
+
+		PspAuthorizationRequest first = new PspAuthorizationRequest(
+			PspAttemptId.generate(), paymentIntentId, new MerchantId(UUID.randomUUID()), Money.positive(1_000, Currency.BRL)
+		);
+		adapter.authorize(first);
+		PspAuthorizationRequest second = new PspAuthorizationRequest(
+			PspAttemptId.generate(), paymentIntentId, new MerchantId(UUID.randomUUID()), Money.positive(1_000, Currency.BRL)
+		);
+		PspAuthorizationResult secondResult = adapter.authorize(second);
+
+		assertThat(secondResult).isInstanceOf(PspAuthorizationResult.Approved.class);
+	}
+
 	private static PspAuthorizationRequest request() {
 		return request(PspAttemptId.generate());
 	}

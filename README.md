@@ -33,7 +33,7 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 **Current phase: Phase 1 executable modular foundation.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation and lookup are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency; authorization, capture, refund, ledger, and production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, and authorization against a deterministic simulated PSP are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call; capture, refund, ledger, and production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -181,7 +181,7 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/payment-intents` | Create a payment intent | Implemented |
 | `GET` | `/api/v1/payment-intents/{id}` | Read current payment state | Implemented |
-| `POST` | `/api/v1/payment-intents/{id}/authorize` | Request authorization | Planned |
+| `POST` | `/api/v1/payment-intents/{id}/authorize` | Request authorization | Implemented |
 | `POST` | `/api/v1/payment-intents/{id}/cancel` | Cancel before authorization begins | Planned |
 | `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount | Planned |
 | `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount | Planned |
@@ -190,7 +190,7 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 | `GET` | `/api/v1/reconciliation/cases` | List detected mismatches | Planned |
 | `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution | Planned |
 
-Mutating operations require an `Idempotency-Key` header. `POST /api/v1/payment-intents` enforces it today; the remaining planned mutations will enforce it as they are implemented.
+Mutating operations require an `Idempotency-Key` header. `POST /api/v1/payment-intents` and `POST /api/v1/payment-intents/{id}/authorize` enforce it today; the remaining planned mutations will enforce it as they are implemented.
 
 ## Portfolio acceptance bar
 

@@ -1,6 +1,7 @@
 package io.github.vinicius.sentinel.integration.psp.internal;
 
 import io.github.vinicius.sentinel.integration.psp.SimulatedPspControls;
+import io.github.vinicius.sentinel.payments.PaymentIntentId;
 import io.github.vinicius.sentinel.payments.PspAttemptId;
 import io.github.vinicius.sentinel.payments.PspAuthorizationPort;
 import io.github.vinicius.sentinel.payments.PspAuthorizationRequest;
@@ -26,9 +27,22 @@ import java.util.concurrent.atomic.AtomicLong;
 class InMemorySimulatedPspAdapter implements PspAuthorizationPort, SimulatedPspControls {
 
 	private final Map<PspAttemptId, AttemptRecord> attempts = new ConcurrentHashMap<>();
+	private final Map<PaymentIntentId, PendingProgram> pendingByPaymentIntentId = new ConcurrentHashMap<>();
 
 	@Override
 	public PspAuthorizationResult authorize(PspAuthorizationRequest request) {
+		PendingProgram pending = pendingByPaymentIntentId.remove(request.paymentIntentId());
+		if (pending != null) {
+			AttemptRecord record = new AttemptRecord();
+			record.authorizeOutcome = pending.authorizeOutcome();
+			record.statusOutcome = pending.statusOutcome();
+			appendHistory(record, request.attemptId(), pending.authorizeOutcome());
+			if (!pending.statusOutcome().equals(pending.authorizeOutcome())) {
+				appendHistory(record, request.attemptId(), pending.statusOutcome());
+			}
+			attempts.put(request.attemptId(), record);
+			return record.authorizeOutcome;
+		}
 		return attempts.computeIfAbsent(request.attemptId(), InMemorySimulatedPspAdapter::defaultApprovedRecord).authorizeOutcome;
 	}
 
@@ -98,6 +112,14 @@ class InMemorySimulatedPspAdapter implements PspAuthorizationPort, SimulatedPspC
 	@Override
 	public void reset() {
 		attempts.clear();
+		pendingByPaymentIntentId.clear();
+	}
+
+	@Override
+	public void programNextAttempt(
+		PaymentIntentId paymentIntentId, PspAuthorizationResult authorizeOutcome, PspAuthorizationResult statusOutcome
+	) {
+		pendingByPaymentIntentId.put(paymentIntentId, new PendingProgram(authorizeOutcome, statusOutcome));
 	}
 
 	private AttemptRecord requireRecord(PspAttemptId attemptId) {
@@ -140,4 +162,6 @@ class InMemorySimulatedPspAdapter implements PspAuthorizationPort, SimulatedPspC
 		private final List<PspCallback> history = new CopyOnWriteArrayList<>();
 		private final AtomicLong sequence = new AtomicLong(0);
 	}
+
+	private record PendingProgram(PspAuthorizationResult authorizeOutcome, PspAuthorizationResult statusOutcome) {}
 }

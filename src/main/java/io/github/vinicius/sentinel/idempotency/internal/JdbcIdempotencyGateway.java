@@ -45,7 +45,7 @@ class JdbcIdempotencyGateway implements IdempotencyGateway {
 		}
 
 		ExistingRecord existing = jdbcClient.sql("""
-				SELECT request_hash, state, response_status, response_content_type, response_body, response_location
+				SELECT request_hash, state, resource_id, response_status, response_content_type, response_body, response_location
 				FROM idempotency_records
 				WHERE merchant_id = :merchantId AND operation_name = :operationName AND idempotency_key = :idempotencyKey
 				""")
@@ -58,12 +58,29 @@ class JdbcIdempotencyGateway implements IdempotencyGateway {
 		if (!existing.requestHash().equals(requestHash)) {
 			return new IdempotencyAcquisition.KeyConflict();
 		}
-		if ("IN_PROGRESS".equals(existing.state())) {
-			return new IdempotencyAcquisition.InProgress();
-		}
-		return new IdempotencyAcquisition.Replayed(new StoredResponse(
-			existing.responseStatus(), existing.responseContentType(), existing.responseBody(), existing.responseLocation()
-		));
+		return switch (existing.state()) {
+			case "IN_PROGRESS" -> new IdempotencyAcquisition.InProgress();
+			case "RECOVERY_REQUIRED" -> new IdempotencyAcquisition.RecoveryRequired(existing.resourceId());
+			default -> new IdempotencyAcquisition.Replayed(new StoredResponse(
+				existing.responseStatus(), existing.responseContentType(), existing.responseBody(), existing.responseLocation()
+			));
+		};
+	}
+
+	@Override
+	public void markRecoveryRequired(UUID merchantId, String operationName, IdempotencyKey key, String resourceId) {
+		jdbcClient.sql("""
+				UPDATE idempotency_records
+				SET state = 'RECOVERY_REQUIRED', resource_id = :resourceId, updated_at = :now
+				WHERE merchant_id = :merchantId AND operation_name = :operationName AND idempotency_key = :idempotencyKey
+					AND state = 'IN_PROGRESS'
+				""")
+			.param("resourceId", resourceId)
+			.param("now", Timestamp.from(Instant.now()))
+			.param("merchantId", merchantId)
+			.param("operationName", operationName)
+			.param("idempotencyKey", key.value())
+			.update();
 	}
 
 	@Override
@@ -82,7 +99,7 @@ class JdbcIdempotencyGateway implements IdempotencyGateway {
 				SET state = :state, response_status = :status, response_content_type = :contentType,
 					response_body = :body, response_location = :location, updated_at = :now
 				WHERE merchant_id = :merchantId AND operation_name = :operationName AND idempotency_key = :idempotencyKey
-					AND state = 'IN_PROGRESS'
+					AND state IN ('IN_PROGRESS', 'RECOVERY_REQUIRED')
 				""")
 			.param("state", state)
 			.param("status", response.status())
@@ -99,6 +116,7 @@ class JdbcIdempotencyGateway implements IdempotencyGateway {
 	private record ExistingRecord(
 		String requestHash,
 		String state,
+		String resourceId,
 		Integer responseStatus,
 		String responseContentType,
 		String responseBody,
@@ -109,6 +127,7 @@ class JdbcIdempotencyGateway implements IdempotencyGateway {
 		return new ExistingRecord(
 			rs.getString("request_hash"),
 			rs.getString("state"),
+			rs.getString("resource_id"),
 			(Integer) rs.getObject("response_status"),
 			rs.getString("response_content_type"),
 			rs.getString("response_body"),
