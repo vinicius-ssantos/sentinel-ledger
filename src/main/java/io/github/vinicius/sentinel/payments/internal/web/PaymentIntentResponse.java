@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
 
-record PaymentIntentResponse(
+public record PaymentIntentResponse(
 
 	UUID id,
 
@@ -29,7 +29,7 @@ record PaymentIntentResponse(
 	Instant updatedAt
 ) {
 
-	static PaymentIntentResponse from(PaymentIntent paymentIntent) {
+	public static PaymentIntentResponse from(PaymentIntent paymentIntent) {
 		return new PaymentIntentResponse(
 			paymentIntent.id().value(),
 			paymentIntent.amount().amountInMinorUnitsText(),

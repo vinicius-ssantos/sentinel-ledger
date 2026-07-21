@@ -35,19 +35,19 @@ class PaymentIntentApiExceptionHandler {
 		));
 	}
 
-	@ExceptionHandler(InvalidPaymentIntentAmountException.class)
-	ResponseEntity<ProblemDetail> handleInvalidAmount(InvalidPaymentIntentAmountException ex, HttpServletRequest request) {
+	@ExceptionHandler(MissingIdempotencyKeyException.class)
+	ResponseEntity<ProblemDetail> handleMissingIdempotencyKey(HttpServletRequest request) {
 		return respond(problem(
-			HttpStatus.BAD_REQUEST, "invalid-request", "INVALID_REQUEST",
-			"Invalid payment intent request", ex.getMessage(), request
+			HttpStatus.BAD_REQUEST, "idempotency-key-required", "IDEMPOTENCY_KEY_REQUIRED",
+			"Idempotency key required", "This mutating command requires an Idempotency-Key header.", request
 		));
 	}
 
-	@ExceptionHandler(UnsupportedCurrencyException.class)
-	ResponseEntity<ProblemDetail> handleUnsupportedCurrency(HttpServletRequest request) {
+	@ExceptionHandler(InvalidIdempotencyKeyException.class)
+	ResponseEntity<ProblemDetail> handleInvalidIdempotencyKey(HttpServletRequest request) {
 		return respond(problem(
-			HttpStatus.UNPROCESSABLE_ENTITY, "unsupported-currency", "UNSUPPORTED_CURRENCY",
-			"Unsupported currency", "The MVP accepts BRL only.", request
+			HttpStatus.BAD_REQUEST, "idempotency-key-invalid", "IDEMPOTENCY_KEY_INVALID",
+			"Idempotency key invalid", "The Idempotency-Key header must be 16-128 visible ASCII characters.", request
 		));
 	}
 

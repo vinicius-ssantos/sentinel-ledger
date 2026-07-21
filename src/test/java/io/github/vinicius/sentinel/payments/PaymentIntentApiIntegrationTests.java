@@ -3,8 +3,8 @@ package io.github.vinicius.sentinel.payments;
 import io.github.vinicius.sentinel.TestcontainersConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,6 +37,7 @@ class PaymentIntentApiIntegrationTests {
 	private static final String MERCHANT_PASSWORD = "sentinel-dev-secret";
 	private static final String OTHER_MERCHANT_USERNAME = "sentinel-dev-other-merchant";
 	private static final String OTHER_MERCHANT_PASSWORD = "sentinel-dev-other-secret";
+	private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -44,6 +46,7 @@ class PaymentIntentApiIntegrationTests {
 	void createsAndReadsBackAPaymentIntentForTheAuthenticatedMerchant() throws Exception {
 		MvcResult creation = mockMvc.perform(post("/api/v1/payment-intents")
 				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, newIdempotencyKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"12500\",\"currency\":\"BRL\"}"))
 			.andExpect(status().isCreated())
@@ -65,9 +68,99 @@ class PaymentIntentApiIntegrationTests {
 	}
 
 	@Test
+	void replaysTheStoredResultWhenTheSameKeyAndBodyAreResubmitted() throws Exception {
+		String idempotencyKey = newIdempotencyKey();
+		String body = "{\"amountInMinorUnits\":\"777\",\"currency\":\"BRL\"}";
+
+		MvcResult first = mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isCreated())
+			.andExpect(header().doesNotExist("Idempotent-Replayed"))
+			.andReturn();
+
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isCreated())
+			.andExpect(header().string("Idempotent-Replayed", "true"))
+			.andExpect(header().string("Location", first.getResponse().getHeader("Location")))
+			.andExpect(content().string(first.getResponse().getContentAsString()));
+	}
+
+	@Test
+	void rejectsTheSameKeyReusedWithADifferentBody() throws Exception {
+		String idempotencyKey = newIdempotencyKey();
+
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"amountInMinorUnits\":\"100\",\"currency\":\"BRL\"}"))
+			.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"amountInMinorUnits\":\"200\",\"currency\":\"BRL\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+	}
+
+	@Test
+	void replaysAStoredValidationFailureForTheSameKeyAndBody() throws Exception {
+		String idempotencyKey = newIdempotencyKey();
+		String body = "{\"amountInMinorUnits\":\"500\",\"currency\":\"USD\"}";
+
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(jsonPath("$.code").value("UNSUPPORTED_CURRENCY"));
+
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(body))
+			.andExpect(status().isUnprocessableEntity())
+			.andExpect(header().string("Idempotent-Replayed", "true"))
+			.andExpect(jsonPath("$.code").value("UNSUPPORTED_CURRENCY"));
+	}
+
+	@Test
+	void rejectsAMissingIdempotencyKey() throws Exception {
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"amountInMinorUnits\":\"500\",\"currency\":\"BRL\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REQUIRED"));
+	}
+
+	@Test
+	void rejectsATooShortIdempotencyKey() throws Exception {
+		mockMvc.perform(post("/api/v1/payment-intents")
+				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, "short-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"amountInMinorUnits\":\"500\",\"currency\":\"BRL\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_INVALID"));
+	}
+
+	@Test
 	void hidesAPaymentIntentFromAMerchantThatDoesNotOwnIt() throws Exception {
 		MvcResult creation = mockMvc.perform(post("/api/v1/payment-intents")
 				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, newIdempotencyKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"500\",\"currency\":\"BRL\"}"))
 			.andExpect(status().isCreated())
@@ -91,6 +184,7 @@ class PaymentIntentApiIntegrationTests {
 	void rejectsAMissingCurrency() throws Exception {
 		mockMvc.perform(post("/api/v1/payment-intents")
 				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, newIdempotencyKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"500\"}"))
 			.andExpect(status().isBadRequest())
@@ -101,6 +195,7 @@ class PaymentIntentApiIntegrationTests {
 	void rejectsANonPositiveAmount() throws Exception {
 		mockMvc.perform(post("/api/v1/payment-intents")
 				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, newIdempotencyKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"0\",\"currency\":\"BRL\"}"))
 			.andExpect(status().isBadRequest())
@@ -111,6 +206,7 @@ class PaymentIntentApiIntegrationTests {
 	void rejectsAMalformedAmount() throws Exception {
 		mockMvc.perform(post("/api/v1/payment-intents")
 				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, newIdempotencyKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"12.50\",\"currency\":\"BRL\"}"))
 			.andExpect(status().isBadRequest())
@@ -121,6 +217,7 @@ class PaymentIntentApiIntegrationTests {
 	void rejectsAnUnsupportedCurrency() throws Exception {
 		mockMvc.perform(post("/api/v1/payment-intents")
 				.with(httpBasic(MERCHANT_USERNAME, MERCHANT_PASSWORD))
+				.header(IDEMPOTENCY_KEY_HEADER, newIdempotencyKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"500\",\"currency\":\"USD\"}"))
 			.andExpect(status().isUnprocessableEntity())
@@ -133,5 +230,9 @@ class PaymentIntentApiIntegrationTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"amountInMinorUnits\":\"500\",\"currency\":\"BRL\"}"))
 			.andExpect(status().isUnauthorized());
+	}
+
+	private static String newIdempotencyKey() {
+		return UUID.randomUUID().toString();
 	}
 }
