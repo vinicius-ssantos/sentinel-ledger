@@ -86,6 +86,34 @@ class JdbcIdempotencyGatewayIntegrationTests {
 	}
 
 	@Test
+	void reportsRecoveryRequiredForTheSameKeyAndHashAfterMarkingItSo() {
+		UUID merchantId = UUID.randomUUID();
+		IdempotencyKey key = newKey();
+
+		idempotencyGateway.acquire(merchantId, OPERATION, key, "hash-a");
+		idempotencyGateway.markRecoveryRequired(merchantId, OPERATION, key, "payment-intent-123");
+		IdempotencyAcquisition second = idempotencyGateway.acquire(merchantId, OPERATION, key, "hash-a");
+
+		assertThat(second).isInstanceOf(IdempotencyAcquisition.RecoveryRequired.class);
+		assertThat(((IdempotencyAcquisition.RecoveryRequired) second).resourceId()).isEqualTo("payment-intent-123");
+	}
+
+	@Test
+	void completingFromRecoveryRequiredReplaysTheStoredResponseAfterwards() {
+		UUID merchantId = UUID.randomUUID();
+		IdempotencyKey key = newKey();
+		StoredResponse response = new StoredResponse(200, "application/json", "{\"state\":\"AUTHORIZED\"}", null);
+
+		idempotencyGateway.acquire(merchantId, OPERATION, key, "hash-a");
+		idempotencyGateway.markRecoveryRequired(merchantId, OPERATION, key, "payment-intent-123");
+		idempotencyGateway.complete(merchantId, OPERATION, key, response);
+		IdempotencyAcquisition replay = idempotencyGateway.acquire(merchantId, OPERATION, key, "hash-a");
+
+		assertThat(replay).isInstanceOf(IdempotencyAcquisition.Replayed.class);
+		assertThat(((IdempotencyAcquisition.Replayed) replay).response()).isEqualTo(response);
+	}
+
+	@Test
 	void concurrentAcquisitionForTheSameKeyHasExactlyOneOwner() throws Exception {
 		UUID merchantId = UUID.randomUUID();
 		IdempotencyKey key = newKey();

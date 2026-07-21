@@ -11,6 +11,13 @@ public sealed interface IdempotencyAcquisition {
 	/** A terminal outcome already exists for the same canonical request; replay it verbatim. */
 	record Replayed(StoredResponse response) implements IdempotencyAcquisition {}
 
+	/**
+	 * A durable resource exists for this request but no terminal response was recorded yet — for example, a
+	 * process stopped between committing a persist-call-persist step and completing the external call. The caller
+	 * must recover from the resource's durable state and provider evidence rather than blindly repeating the call.
+	 */
+	record RecoveryRequired(String resourceId) implements IdempotencyAcquisition {}
+
 	/** The key is already scoped to a different canonical request. */
 	record KeyConflict() implements IdempotencyAcquisition {}
 
