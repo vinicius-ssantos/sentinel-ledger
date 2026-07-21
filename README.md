@@ -33,7 +33,7 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 **Current phase: Phase 1 executable modular foundation.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment workflows, PostgreSQL persistence, and production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation and lookup are backed by PostgreSQL behind an authenticated merchant boundary; authorization, capture, refund, ledger, persistent idempotency, and production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -69,7 +69,7 @@ With the application running, verify its local health endpoint:
 curl http://localhost:8080/actuator/health
 ```
 
-PowerShell users can run `Invoke-RestMethod http://localhost:8080/actuator/health`. The expected status is `UP`. No business API endpoints exist yet.
+PowerShell users can run `Invoke-RestMethod http://localhost:8080/actuator/health`. The expected status is `UP`. The first business endpoints, payment intent creation and lookup, are documented below and require HTTP Basic merchant authentication; interactive OpenAPI documentation is served at `/swagger-ui.html` once the application is running.
 
 `./mvnw verify` also validates the Spring Modulith structure, starts PostgreSQL integration tests, applies and validates Flyway migrations from an empty database, and generates diagrams plus module canvases under `target/spring-modulith-docs`.
 
@@ -177,20 +177,20 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 
 ## Initial API outline
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| `POST` | `/api/v1/payment-intents` | Create a payment intent |
-| `GET` | `/api/v1/payment-intents/{id}` | Read current payment state |
-| `POST` | `/api/v1/payment-intents/{id}/authorize` | Request authorization |
-| `POST` | `/api/v1/payment-intents/{id}/cancel` | Cancel before authorization begins |
-| `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount |
-| `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount |
-| `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline |
-| `GET` | `/api/v1/ledger/accounts/{id}/entries` | Browse ledger entries with cursor pagination |
-| `GET` | `/api/v1/reconciliation/cases` | List detected mismatches |
-| `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution |
+| Method | Endpoint | Purpose | Status |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/payment-intents` | Create a payment intent | Implemented |
+| `GET` | `/api/v1/payment-intents/{id}` | Read current payment state | Implemented |
+| `POST` | `/api/v1/payment-intents/{id}/authorize` | Request authorization | Planned |
+| `POST` | `/api/v1/payment-intents/{id}/cancel` | Cancel before authorization begins | Planned |
+| `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount | Planned |
+| `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount | Planned |
+| `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline | Planned |
+| `GET` | `/api/v1/ledger/accounts/{id}/entries` | Browse ledger entries with cursor pagination | Planned |
+| `GET` | `/api/v1/reconciliation/cases` | List detected mismatches | Planned |
+| `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution | Planned |
 
-All mutating operations will require an `Idempotency-Key` header.
+Mutating operations will require an `Idempotency-Key` header once persistent idempotency lands; `POST /api/v1/payment-intents` does not enforce it yet.
 
 ## Portfolio acceptance bar
 
