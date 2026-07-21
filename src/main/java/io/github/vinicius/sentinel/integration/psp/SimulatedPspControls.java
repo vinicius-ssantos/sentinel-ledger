@@ -1,5 +1,6 @@
 package io.github.vinicius.sentinel.integration.psp;
 
+import io.github.vinicius.sentinel.payments.PaymentIntentId;
 import io.github.vinicius.sentinel.payments.PspAttemptId;
 import io.github.vinicius.sentinel.payments.PspAuthorizationResult;
 import io.github.vinicius.sentinel.payments.PspCallback;
@@ -37,4 +38,12 @@ public interface SimulatedPspControls {
 
 	/** Clears every programmed attempt and callback history. */
 	void reset();
+
+	/**
+	 * Programs the outcome for whichever {@link PspAttemptId} the next {@code authorize} call generates for this
+	 * payment intent, since that attempt identity does not exist yet when a caller sets up a scenario. Consumed
+	 * exactly once: the next {@code authorize(request)} for this payment intent materializes it under the real
+	 * attempt id and removes the pending program.
+	 */
+	void programNextAttempt(PaymentIntentId paymentIntentId, PspAuthorizationResult authorizeOutcome, PspAuthorizationResult statusOutcome);
 }
