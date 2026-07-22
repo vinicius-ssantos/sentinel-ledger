@@ -60,6 +60,27 @@ class JdbcLedgerPostingGateway implements LedgerPostingPort {
 			.map(this::hydrate);
 	}
 
+	@Override
+	public List<LedgerTransaction> findByBusinessEffectReferencePrefix(String prefix) {
+		return jdbcClient.sql("""
+				SELECT id, business_effect_reference, currency_code, currency_fraction_digits,
+					reverses_ledger_transaction_id, posted_at
+				FROM ledger_transactions
+				WHERE business_effect_reference LIKE :prefix ESCAPE '\\'
+				ORDER BY posted_at ASC
+				""")
+			.param("prefix", escapeLikePattern(prefix) + "%")
+			.query(JdbcLedgerPostingGateway::toHeader)
+			.list()
+			.stream()
+			.map(this::hydrate)
+			.toList();
+	}
+
+	private static String escapeLikePattern(String value) {
+		return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+	}
+
 	private boolean insertTransactionHeader(LedgerTransaction transaction) {
 		int inserted = jdbcClient.sql("""
 				INSERT INTO ledger_transactions (
@@ -85,8 +106,8 @@ class JdbcLedgerPostingGateway implements LedgerPostingPort {
 		for (int i = 0; i < entries.size(); i++) {
 			LedgerEntry entry = entries.get(i);
 			jdbcClient.sql("""
-					INSERT INTO ledger_entries (id, ledger_transaction_id, entry_sequence, account_id, direction, amount_minor)
-					VALUES (:id, :transactionId, :sequence, :accountId, :direction, :amountMinor)
+					INSERT INTO ledger_entries (id, ledger_transaction_id, entry_sequence, account_id, direction, amount_minor, posted_at)
+					VALUES (:id, :transactionId, :sequence, :accountId, :direction, :amountMinor, :postedAt)
 					""")
 				.param("id", UUID.randomUUID())
 				.param("transactionId", transaction.id().value())
@@ -94,6 +115,7 @@ class JdbcLedgerPostingGateway implements LedgerPostingPort {
 				.param("accountId", entry.accountId().value())
 				.param("direction", entry.direction().name())
 				.param("amountMinor", entry.amount().amountInMinorUnits())
+				.param("postedAt", Timestamp.from(transaction.postedAt()))
 				.update();
 		}
 	}

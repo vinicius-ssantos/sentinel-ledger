@@ -165,6 +165,55 @@ class LedgerPostingIntegrationTests {
 	}
 
 	@Test
+	void findsOnlyTransactionsWhoseBusinessEffectReferenceStartsWithThePrefix() {
+		AccountId payable = AccountId.merchantPayable(UUID.randomUUID(), Currency.BRL);
+		String paymentIntentId = UUID.randomUUID().toString();
+		LedgerTransaction capture = LedgerTransaction.post(
+			LedgerTransactionId.generate(), "capture:" + paymentIntentId + ":key-1", Currency.BRL,
+			List.of(
+				new LedgerEntry(RECEIVABLE, EntryDirection.DEBIT, Money.positive(1_000, Currency.BRL)),
+				new LedgerEntry(payable, EntryDirection.CREDIT, Money.positive(1_000, Currency.BRL))
+			),
+			Instant.now()
+		);
+		LedgerTransaction unrelated = LedgerTransaction.post(
+			LedgerTransactionId.generate(), "capture:" + UUID.randomUUID() + ":key-2", Currency.BRL,
+			List.of(
+				new LedgerEntry(RECEIVABLE, EntryDirection.DEBIT, Money.positive(1_000, Currency.BRL)),
+				new LedgerEntry(payable, EntryDirection.CREDIT, Money.positive(1_000, Currency.BRL))
+			),
+			Instant.now()
+		);
+		ledgerPostingPort.post(capture);
+		ledgerPostingPort.post(unrelated);
+
+		List<LedgerTransaction> found = ledgerPostingPort.findByBusinessEffectReferencePrefix("capture:" + paymentIntentId + ":");
+
+		assertThat(found).extracting(LedgerTransaction::id).containsExactly(capture.id());
+	}
+
+	@Test
+	void treatsPercentAndUnderscoreInThePrefixAsLiteralCharactersNotWildcards() {
+		AccountId payable = AccountId.merchantPayable(UUID.randomUUID(), Currency.BRL);
+		String weirdKey = "key_with_underscores%and%percents";
+		LedgerTransaction transaction = LedgerTransaction.post(
+			LedgerTransactionId.generate(), "capture:pi-1:" + weirdKey, Currency.BRL,
+			List.of(
+				new LedgerEntry(RECEIVABLE, EntryDirection.DEBIT, Money.positive(1_000, Currency.BRL)),
+				new LedgerEntry(payable, EntryDirection.CREDIT, Money.positive(1_000, Currency.BRL))
+			),
+			Instant.now()
+		);
+		ledgerPostingPort.post(transaction);
+
+		List<LedgerTransaction> exactPrefixMatch = ledgerPostingPort.findByBusinessEffectReferencePrefix("capture:pi-1:key_with_underscores%and%percents");
+		List<LedgerTransaction> wildcardWouldOverMatch = ledgerPostingPort.findByBusinessEffectReferencePrefix("capture:pi-1:keyXwithXunderscores");
+
+		assertThat(exactPrefixMatch).extracting(LedgerTransaction::id).containsExactly(transaction.id());
+		assertThat(wildcardWouldOverMatch).isEmpty();
+	}
+
+	@Test
 	void rejectsAZeroAmountEntryAtTheDatabaseLevelIfSomehowConstructed() {
 		assertThatThrownBy(() -> jdbcTemplate.update(
 			"insert into ledger_entries (id, ledger_transaction_id, entry_sequence, account_id, direction, amount_minor) "

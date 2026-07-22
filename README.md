@@ -33,7 +33,7 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 **Current phase: Phase 1 executable modular foundation.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund command in the same local transaction as its business effect. Production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund command in the same local transaction as its business effect. A payment intent's timeline correlates that audit evidence with resolved provider results and ledger postings, and a merchant can browse their own ledger account's entries with keyset (not offset) cursor pagination. Production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -185,8 +185,8 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 | `POST` | `/api/v1/payment-intents/{id}/cancel` | Cancel before authorization begins | Planned |
 | `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount | Implemented |
 | `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount | Implemented |
-| `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline | Planned |
-| `GET` | `/api/v1/ledger/accounts/{id}/entries` | Browse ledger entries with cursor pagination | Planned |
+| `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline | Implemented |
+| `GET` | `/api/v1/ledger/accounts/{id}/entries` | Browse ledger entries with cursor pagination | Implemented |
 | `GET` | `/api/v1/reconciliation/cases` | List detected mismatches | Planned |
 | `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution | Planned |
 

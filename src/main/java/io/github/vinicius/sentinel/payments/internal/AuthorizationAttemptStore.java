@@ -5,6 +5,7 @@ import io.github.vinicius.sentinel.payments.PspAttemptId;
 import io.github.vinicius.sentinel.payments.PspAuthorizationResult;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -19,4 +20,7 @@ interface AuthorizationAttemptStore {
 	Optional<PspAttemptId> findPendingAttempt(PaymentIntentId paymentIntentId);
 
 	void recordResolution(PaymentIntentId paymentIntentId, PspAttemptId attemptId, PspAuthorizationResult result, Instant occurredAt);
+
+	/** Every resolved PSP evidence record for this payment intent, ordered {@code occurredAt} ascending. */
+	List<ResolvedAuthorizationAttempt> findResolutions(PaymentIntentId paymentIntentId);
 }

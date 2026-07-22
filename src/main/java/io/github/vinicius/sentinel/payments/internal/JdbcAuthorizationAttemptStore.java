@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,6 +61,24 @@ class JdbcAuthorizationAttemptStore implements AuthorizationAttemptStore {
 			.param("reasonCode", evidence.reasonCode())
 			.param("occurredAt", Timestamp.from(occurredAt))
 			.update();
+	}
+
+	@Override
+	public List<ResolvedAuthorizationAttempt> findResolutions(PaymentIntentId paymentIntentId) {
+		return jdbcClient.sql("""
+				SELECT outcome, provider_reference, reason_code, occurred_at
+				FROM payment_intent_psp_attempts
+				WHERE payment_intent_id = :paymentIntentId
+				ORDER BY occurred_at ASC, id ASC
+				""")
+			.param("paymentIntentId", paymentIntentId.value())
+			.query((rs, rowNum) -> new ResolvedAuthorizationAttempt(
+				rs.getString("outcome"),
+				rs.getString("provider_reference"),
+				rs.getString("reason_code"),
+				rs.getTimestamp("occurred_at").toInstant()
+			))
+			.list();
 	}
 
 	private static Evidence toEvidence(PspAuthorizationResult result) {
