@@ -14,6 +14,8 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -77,6 +79,34 @@ class JdbcPaymentIntentStore implements PaymentIntentStore {
 			.param("merchantId", merchantId.value())
 			.query(JdbcPaymentIntentStore::toPaymentIntent)
 			.optional();
+	}
+
+	@Override
+	public Optional<PaymentIntent> findById(PaymentIntentId id) {
+		return jdbcClient.sql("""
+				SELECT id, merchant_id, amount_minor, currency_code, currency_fraction_digits,
+					state, captured_amount_minor, refunded_amount_minor, aggregate_version,
+					created_at, updated_at
+				FROM payment_intents
+				WHERE id = :id
+				""")
+			.param("id", id.value())
+			.query(JdbcPaymentIntentStore::toPaymentIntent)
+			.optional();
+	}
+
+	@Override
+	public List<PaymentIntentId> findAuthorizationPendingOlderThan(Instant threshold) {
+		return jdbcClient.sql("""
+				SELECT id
+				FROM payment_intents
+				WHERE state IN ('AUTHORIZATION_PENDING', 'AUTHORIZATION_UNKNOWN')
+					AND updated_at < :threshold
+				ORDER BY updated_at ASC
+				""")
+			.param("threshold", Timestamp.from(threshold))
+			.query((rs, rowNum) -> new PaymentIntentId(rs.getObject("id", UUID.class)))
+			.list();
 	}
 
 	private static PaymentIntent toPaymentIntent(ResultSet rs, int rowNum) throws SQLException {

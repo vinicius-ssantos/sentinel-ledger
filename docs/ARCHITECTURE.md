@@ -24,7 +24,7 @@ In priority order:
 | `money` | Immutable monetary amounts and explicit currency metadata | JDK only |
 | `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | money API, merchant API, ledger API, idempotency API, audit API |
 | `ledger` | Ledger accounts, transactions, entries, projections | money API, audit API |
-| `reconciliation` | Cases, mismatch rules, resolutions | payments API, ledger API, PSP port, audit API |
+| `reconciliation` | Cases, mismatch rules, resolutions | money API, payments API, ledger API, PSP port, audit API |
 | `idempotency` | Keys, request hashes, stored outcomes | shared technical primitives only |
 | `integration.psp` | Provider requests, results, callbacks, and the simulated provider adapter | payments PSP port and public events |
 | `merchant` | Merchant configuration and access context | shared technical primitives only |

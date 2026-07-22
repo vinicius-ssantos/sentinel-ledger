@@ -31,9 +31,9 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 ## Project status
 
-**Current phase: Phase 1 executable modular foundation.**
+**Current phase: Phase 1 (executable modular foundation) and Phase 2 (financial correctness and recovery) deliverables are implemented; Phase 3 (async reliability and observability) has not started.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund command in the same local transaction as its business effect. A payment intent's timeline correlates that audit evidence with resolved provider results and ledger postings, and a merchant can browse their own ledger account's entries with keyset (not offset) cursor pagination. Production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund/reconciliation-resolution command in the same local transaction as its business effect. A payment intent's timeline correlates that audit evidence with resolved provider results and ledger postings, and a merchant can browse their own ledger account's entries with keyset (not offset) cursor pagination. The `reconciliation` module detects authorization outcome divergence between local and simulated-provider evidence (on-demand and via a scheduled sweep for stuck uncertain authorizations), deduplicates open cases by fingerprint, and lets a separately authenticated operator resolve a case with a compensating ledger transaction when funds need reversing. Production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -187,10 +187,11 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 | `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount | Implemented |
 | `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline | Implemented |
 | `GET` | `/api/v1/ledger/accounts/{id}/entries` | Browse ledger entries with cursor pagination | Implemented |
-| `GET` | `/api/v1/reconciliation/cases` | List detected mismatches | Planned |
-| `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution | Planned |
+| `GET` | `/api/v1/reconciliation/cases` | List detected mismatches (operator-only) | Implemented |
+| `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution (operator-only) | Implemented |
+| `POST` | `/api/v1/reconciliation/checks/payment-intents/{id}` | Run an on-demand reconciliation check (operator-only) | Implemented |
 
-Mutating operations require an `Idempotency-Key` header. `POST /api/v1/payment-intents`, `POST /api/v1/payment-intents/{id}/authorize`, `POST /api/v1/payment-intents/{id}/captures`, and `POST /api/v1/payment-intents/{id}/refunds` enforce it today; the remaining planned mutations will enforce it as they are implemented.
+Mutating merchant-facing operations require an `Idempotency-Key` header. `POST /api/v1/payment-intents`, `POST /api/v1/payment-intents/{id}/authorize`, `POST /api/v1/payment-intents/{id}/captures`, and `POST /api/v1/payment-intents/{id}/refunds` enforce it today; the remaining planned mutations will enforce it as they are implemented. The operator-only reconciliation endpoints do not: a resolve retry cannot double-apply a compensation (guarded by the case's `OPEN`/`INVESTIGATING` status), but currently returns a `409` instead of replaying the original response — a known simplification, not full idempotency-key support.
 
 ## Portfolio acceptance bar
 
@@ -234,7 +235,7 @@ The required concurrency proof will run at least twenty simultaneous capture req
 
 Telemetry will correlate API, database, simulated PSP, and future broker operations with business identifiers. No latency or throughput promise will be published without a reproducible benchmark environment.
 
-The project will never store PAN, CVV, real card tokens, or production payment credentials. Merchant identity must come from authenticated context, never from an untrusted header alone. Sensitive operator actions will be separately authorized, confirmed, and audited. The lightweight threat model is maintained in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+The project will never store PAN, CVV, real card tokens, or production payment credentials. Merchant identity must come from authenticated context, never from an untrusted header alone. Sensitive operator actions are separately authorized (a distinct `ROLE_OPERATOR` credential, never a merchant one), require explicit confirmation, and are audited. The lightweight threat model is maintained in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## Delivery roadmap
 

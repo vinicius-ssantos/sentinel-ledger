@@ -4,6 +4,6 @@
 @org.springframework.modulith.ApplicationModule(
 	id = "reconciliation",
 	displayName = "Reconciliation",
-	allowedDependencies = { "payments", "ledger", "integration.psp", "audit" }
+	allowedDependencies = { "payments", "ledger", "integration.psp", "audit", "money" }
 )
 package io.github.vinicius.sentinel.reconciliation;
