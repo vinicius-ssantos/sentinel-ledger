@@ -33,7 +33,7 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 **Current phase: Phase 1 executable modular foundation.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, and authorization against a deterministic simulated PSP are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection, but nothing calls it yet; capture, refund, and production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; capture posts to it today, and refund is the next consumer. Refund and production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -171,7 +171,7 @@ Persist AUTHORIZED, DECLINED, or AUTHORIZATION_UNKNOWN
 Recover uncertainty through status lookup, callback, or reconciliation
 ```
 
-Capture and refund effects will update payment state, post balanced ledger entries, and record audit evidence in one local transaction.
+Capture applies in one local transaction: the payment state update and its balanced ledger posting either both commit or both roll back, deduplicated by an idempotency-key-derived business effect reference. Refund will follow the same pattern; audit evidence recording is deferred until the `audit` module exists.
 
 The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL.md](docs/FAILURE_MODEL.md).
 
@@ -183,14 +183,14 @@ The complete deterministic failure taxonomy is documented in [docs/FAILURE_MODEL
 | `GET` | `/api/v1/payment-intents/{id}` | Read current payment state | Implemented |
 | `POST` | `/api/v1/payment-intents/{id}/authorize` | Request authorization | Implemented |
 | `POST` | `/api/v1/payment-intents/{id}/cancel` | Cancel before authorization begins | Planned |
-| `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount | Planned |
+| `POST` | `/api/v1/payment-intents/{id}/captures` | Capture an authorized amount | Implemented |
 | `POST` | `/api/v1/payment-intents/{id}/refunds` | Refund a captured amount | Planned |
 | `GET` | `/api/v1/payment-intents/{id}/timeline` | Read the state and audit timeline | Planned |
 | `GET` | `/api/v1/ledger/accounts/{id}/entries` | Browse ledger entries with cursor pagination | Planned |
 | `GET` | `/api/v1/reconciliation/cases` | List detected mismatches | Planned |
 | `POST` | `/api/v1/reconciliation/cases/{id}/resolve` | Record an operator resolution | Planned |
 
-Mutating operations require an `Idempotency-Key` header. `POST /api/v1/payment-intents` and `POST /api/v1/payment-intents/{id}/authorize` enforce it today; the remaining planned mutations will enforce it as they are implemented.
+Mutating operations require an `Idempotency-Key` header. `POST /api/v1/payment-intents`, `POST /api/v1/payment-intents/{id}/authorize`, and `POST /api/v1/payment-intents/{id}/captures` enforce it today; the remaining planned mutations will enforce it as they are implemented.
 
 ## Portfolio acceptance bar
 
