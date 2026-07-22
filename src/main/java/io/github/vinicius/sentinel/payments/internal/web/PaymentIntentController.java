@@ -9,7 +9,9 @@ import io.github.vinicius.sentinel.payments.internal.ApiResult;
 import io.github.vinicius.sentinel.payments.internal.AuthorizePaymentIntentService;
 import io.github.vinicius.sentinel.payments.internal.CapturePaymentIntentService;
 import io.github.vinicius.sentinel.payments.internal.PaymentIntentCommandService;
+import io.github.vinicius.sentinel.payments.internal.PaymentIntentTimelineService;
 import io.github.vinicius.sentinel.payments.internal.RefundPaymentIntentService;
+import io.github.vinicius.sentinel.payments.internal.TimelineEntry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -41,6 +44,7 @@ class PaymentIntentController {
 	private final AuthorizePaymentIntentService authorizePaymentIntentService;
 	private final CapturePaymentIntentService capturePaymentIntentService;
 	private final RefundPaymentIntentService refundPaymentIntentService;
+	private final PaymentIntentTimelineService paymentIntentTimelineService;
 
 	PaymentIntentController(
 		PaymentIntentStore paymentIntentStore,
@@ -48,7 +52,8 @@ class PaymentIntentController {
 		PaymentIntentCommandService paymentIntentCommandService,
 		AuthorizePaymentIntentService authorizePaymentIntentService,
 		CapturePaymentIntentService capturePaymentIntentService,
-		RefundPaymentIntentService refundPaymentIntentService
+		RefundPaymentIntentService refundPaymentIntentService,
+		PaymentIntentTimelineService paymentIntentTimelineService
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.currentMerchantResolver = currentMerchantResolver;
@@ -56,6 +61,7 @@ class PaymentIntentController {
 		this.authorizePaymentIntentService = authorizePaymentIntentService;
 		this.capturePaymentIntentService = capturePaymentIntentService;
 		this.refundPaymentIntentService = refundPaymentIntentService;
+		this.paymentIntentTimelineService = paymentIntentTimelineService;
 	}
 
 	@PostMapping
@@ -173,6 +179,21 @@ class PaymentIntentController {
 		return paymentIntentStore.findOwned(new PaymentIntentId(id), merchantId)
 			.map(PaymentIntentResponse::from)
 			.orElseThrow(PaymentIntentNotFoundException::new);
+	}
+
+	@GetMapping("/{id}/timeline")
+	@Operation(
+		summary = "Read a payment intent's timeline",
+		description = "Correlates audit evidence, resolved provider results, and ledger postings for one payment "
+			+ "intent, ordered by occurrence time ascending."
+	)
+	@ApiResponse(responseCode = "200", description = "Timeline entries, oldest first (may be empty)")
+	@ApiResponse(responseCode = "404", description = "Payment intent absent or owned by another merchant")
+	List<TimelineEntry> timeline(@PathVariable UUID id) {
+		MerchantId merchantId = currentMerchantResolver.requireCurrentMerchantId();
+		PaymentIntentId paymentIntentId = new PaymentIntentId(id);
+		paymentIntentStore.findOwned(paymentIntentId, merchantId).orElseThrow(PaymentIntentNotFoundException::new);
+		return paymentIntentTimelineService.timeline(paymentIntentId);
 	}
 
 	private static IdempotencyKey requireIdempotencyKey(String header) {
