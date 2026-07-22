@@ -1,5 +1,8 @@
 package io.github.vinicius.sentinel.payments.internal;
 
+import io.github.vinicius.sentinel.audit.AuditActor;
+import io.github.vinicius.sentinel.audit.AuditEvent;
+import io.github.vinicius.sentinel.audit.AuditGateway;
 import io.github.vinicius.sentinel.idempotency.CanonicalRequestHasher;
 import io.github.vinicius.sentinel.idempotency.IdempotencyAcquisition;
 import io.github.vinicius.sentinel.idempotency.IdempotencyGateway;
@@ -24,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -40,17 +44,20 @@ class AuthorizePaymentIntentSteps {
 	private final PaymentIntentStore paymentIntentStore;
 	private final AuthorizationAttemptStore attemptStore;
 	private final IdempotencyGateway idempotencyGateway;
+	private final AuditGateway auditGateway;
 	private final ObjectMapper objectMapper;
 
 	AuthorizePaymentIntentSteps(
 		PaymentIntentStore paymentIntentStore,
 		AuthorizationAttemptStore attemptStore,
 		IdempotencyGateway idempotencyGateway,
+		AuditGateway auditGateway,
 		ObjectMapper objectMapper
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.attemptStore = attemptStore;
 		this.idempotencyGateway = idempotencyGateway;
+		this.auditGateway = auditGateway;
 		this.objectMapper = objectMapper;
 	}
 
@@ -150,6 +157,18 @@ class AuthorizePaymentIntentSteps {
 			try {
 				paymentIntentStore.save(paymentIntent);
 				attemptStore.recordResolution(paymentIntentId, attemptId, result, now);
+				auditGateway.record(AuditEvent.record(
+					AuditActor.merchant(merchantId.value().toString()),
+					AUTHORIZE_OPERATION,
+					"payment_intent",
+					paymentIntentId.value().toString(),
+					idempotencyKey.value(),
+					Map.of(
+						"state", paymentIntent.state().name(),
+						"pspResult", result.getClass().getSimpleName()
+					),
+					now
+				));
 			} catch (OptimisticLockException e) {
 				paymentIntent = paymentIntentStore.findOwned(paymentIntentId, merchantId)
 					.orElseThrow(() -> new IllegalStateException("payment intent disappeared mid-authorization: " + paymentIntentId));

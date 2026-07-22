@@ -1,5 +1,8 @@
 package io.github.vinicius.sentinel.payments.internal;
 
+import io.github.vinicius.sentinel.audit.AuditActor;
+import io.github.vinicius.sentinel.audit.AuditEvent;
+import io.github.vinicius.sentinel.audit.AuditGateway;
 import io.github.vinicius.sentinel.idempotency.CanonicalRequestHasher;
 import io.github.vinicius.sentinel.idempotency.IdempotencyAcquisition;
 import io.github.vinicius.sentinel.idempotency.IdempotencyGateway;
@@ -30,6 +33,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Refund mirrors capture: a single local transaction with no PSP call, so the payment state update and its
@@ -44,17 +48,20 @@ public class RefundPaymentIntentService {
 	private final PaymentIntentStore paymentIntentStore;
 	private final IdempotencyGateway idempotencyGateway;
 	private final LedgerPostingPort ledgerPostingPort;
+	private final AuditGateway auditGateway;
 	private final ObjectMapper objectMapper;
 
 	RefundPaymentIntentService(
 		PaymentIntentStore paymentIntentStore,
 		IdempotencyGateway idempotencyGateway,
 		LedgerPostingPort ledgerPostingPort,
+		AuditGateway auditGateway,
 		ObjectMapper objectMapper
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.idempotencyGateway = idempotencyGateway;
 		this.ledgerPostingPort = ledgerPostingPort;
+		this.auditGateway = auditGateway;
 		this.objectMapper = objectMapper;
 	}
 
@@ -150,6 +157,20 @@ public class RefundPaymentIntentService {
 			Instant.now()
 		);
 		ledgerPostingPort.post(transaction);
+
+		auditGateway.record(AuditEvent.record(
+			AuditActor.merchant(merchantId.value().toString()),
+			REFUND_OPERATION,
+			"payment_intent",
+			paymentIntentId.value().toString(),
+			idempotencyKey.value(),
+			Map.of(
+				"state", paymentIntent.state().name(),
+				"refundedAmountInMinorUnits", amount.amountInMinorUnitsText(),
+				"currency", amount.currency().code()
+			),
+			Instant.now()
+		));
 
 		StoredResponse response = new StoredResponse(
 			HttpStatus.OK.value(),
