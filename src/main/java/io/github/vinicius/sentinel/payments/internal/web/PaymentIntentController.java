@@ -9,6 +9,7 @@ import io.github.vinicius.sentinel.payments.internal.ApiResult;
 import io.github.vinicius.sentinel.payments.internal.AuthorizePaymentIntentService;
 import io.github.vinicius.sentinel.payments.internal.CapturePaymentIntentService;
 import io.github.vinicius.sentinel.payments.internal.PaymentIntentCommandService;
+import io.github.vinicius.sentinel.payments.internal.RefundPaymentIntentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,19 +40,22 @@ class PaymentIntentController {
 	private final PaymentIntentCommandService paymentIntentCommandService;
 	private final AuthorizePaymentIntentService authorizePaymentIntentService;
 	private final CapturePaymentIntentService capturePaymentIntentService;
+	private final RefundPaymentIntentService refundPaymentIntentService;
 
 	PaymentIntentController(
 		PaymentIntentStore paymentIntentStore,
 		CurrentMerchantResolver currentMerchantResolver,
 		PaymentIntentCommandService paymentIntentCommandService,
 		AuthorizePaymentIntentService authorizePaymentIntentService,
-		CapturePaymentIntentService capturePaymentIntentService
+		CapturePaymentIntentService capturePaymentIntentService,
+		RefundPaymentIntentService refundPaymentIntentService
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.currentMerchantResolver = currentMerchantResolver;
 		this.paymentIntentCommandService = paymentIntentCommandService;
 		this.authorizePaymentIntentService = authorizePaymentIntentService;
 		this.capturePaymentIntentService = capturePaymentIntentService;
+		this.refundPaymentIntentService = refundPaymentIntentService;
 	}
 
 	@PostMapping
@@ -124,6 +128,34 @@ class PaymentIntentController {
 		IdempotencyKey idempotencyKey = requireIdempotencyKey(idempotencyKeyHeader);
 		URI instance = URI.create("/api/v1/payment-intents/" + id + "/captures");
 		ApiResult result = capturePaymentIntentService.capture(
+			merchantId, idempotencyKey, new PaymentIntentId(id), request.amountInMinorUnits(), request.currency(), instance
+		);
+		return toResponseEntity(result);
+	}
+
+	@PostMapping("/{id}/refunds")
+	@Operation(
+		summary = "Refund a captured payment intent",
+		description = "Refunds all or part of the remaining refundable (captured minus already refunded) amount. "
+			+ "Never calls the PSP; the refunded amount and its compensating ledger transaction are persisted in "
+			+ "one local transaction. The original capture entries are never modified."
+	)
+	@ApiResponse(responseCode = "200", description = "Refund applied (state is PARTIALLY_REFUNDED or REFUNDED)")
+	@ApiResponse(responseCode = "400", description = "Invalid amount, malformed request, or missing/invalid idempotency key")
+	@ApiResponse(responseCode = "404", description = "Payment intent absent or owned by another merchant")
+	@ApiResponse(responseCode = "409", description = "Refund exceeds the remaining refundable amount, invalid transition, "
+		+ "idempotency key reused, still in progress, or lost a concurrent race")
+	@ApiResponse(responseCode = "422", description = "Unsupported currency")
+	ResponseEntity<String> refund(
+		@PathVariable UUID id,
+		@Parameter(description = "16-128 visible ASCII characters, unique per merchant and operation", required = true)
+		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKeyHeader,
+		@Valid @RequestBody RefundRequest request
+	) {
+		MerchantId merchantId = currentMerchantResolver.requireCurrentMerchantId();
+		IdempotencyKey idempotencyKey = requireIdempotencyKey(idempotencyKeyHeader);
+		URI instance = URI.create("/api/v1/payment-intents/" + id + "/refunds");
+		ApiResult result = refundPaymentIntentService.refund(
 			merchantId, idempotencyKey, new PaymentIntentId(id), request.amountInMinorUnits(), request.currency(), instance
 		);
 		return toResponseEntity(result);
