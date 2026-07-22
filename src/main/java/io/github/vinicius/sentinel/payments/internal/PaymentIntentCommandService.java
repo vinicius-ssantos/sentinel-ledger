@@ -1,5 +1,8 @@
 package io.github.vinicius.sentinel.payments.internal;
 
+import io.github.vinicius.sentinel.audit.AuditActor;
+import io.github.vinicius.sentinel.audit.AuditEvent;
+import io.github.vinicius.sentinel.audit.AuditGateway;
 import io.github.vinicius.sentinel.idempotency.CanonicalRequestHasher;
 import io.github.vinicius.sentinel.idempotency.IdempotencyAcquisition;
 import io.github.vinicius.sentinel.idempotency.IdempotencyGateway;
@@ -21,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.Map;
 
 @Service
 public class PaymentIntentCommandService {
@@ -29,15 +33,18 @@ public class PaymentIntentCommandService {
 
 	private final PaymentIntentStore paymentIntentStore;
 	private final IdempotencyGateway idempotencyGateway;
+	private final AuditGateway auditGateway;
 	private final ObjectMapper objectMapper;
 
 	PaymentIntentCommandService(
 		PaymentIntentStore paymentIntentStore,
 		IdempotencyGateway idempotencyGateway,
+		AuditGateway auditGateway,
 		ObjectMapper objectMapper
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.idempotencyGateway = idempotencyGateway;
+		this.auditGateway = auditGateway;
 		this.objectMapper = objectMapper;
 	}
 
@@ -92,6 +99,20 @@ public class PaymentIntentCommandService {
 
 		PaymentIntent paymentIntent = PaymentIntent.create(PaymentIntentId.generate(), merchantId, amount, Instant.now());
 		paymentIntentStore.save(paymentIntent);
+
+		auditGateway.record(AuditEvent.record(
+			AuditActor.merchant(merchantId.value().toString()),
+			CREATE_OPERATION,
+			"payment_intent",
+			paymentIntent.id().value().toString(),
+			idempotencyKey.value(),
+			Map.of(
+				"state", paymentIntent.state().name(),
+				"amountInMinorUnits", paymentIntent.amount().amountInMinorUnitsText(),
+				"currency", paymentIntent.amount().currency().code()
+			),
+			Instant.now()
+		));
 
 		StoredResponse response = new StoredResponse(
 			HttpStatus.CREATED.value(),
