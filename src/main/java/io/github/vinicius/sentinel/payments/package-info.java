@@ -4,6 +4,6 @@
 @org.springframework.modulith.ApplicationModule(
 	id = "payments",
 	displayName = "Payments",
-	allowedDependencies = { "money", "merchant", "ledger", "idempotency", "audit" }
+	allowedDependencies = { "money", "merchant", "ledger", "idempotency", "audit", "outbox" }
 )
 package io.github.vinicius.sentinel.payments;

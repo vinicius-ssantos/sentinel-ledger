@@ -7,6 +7,8 @@ import io.github.vinicius.sentinel.idempotency.IdempotencyKey;
 import io.github.vinicius.sentinel.idempotency.StoredResponse;
 import io.github.vinicius.sentinel.merchant.CurrentMerchantResolver;
 import io.github.vinicius.sentinel.merchant.MerchantId;
+import io.github.vinicius.sentinel.outbox.OutboxEvent;
+import io.github.vinicius.sentinel.outbox.OutboxGateway;
 import io.github.vinicius.sentinel.payments.PspAttemptId;
 import io.github.vinicius.sentinel.payments.PspAuthorizationPort;
 import io.github.vinicius.sentinel.payments.PspAuthorizationRequest;
@@ -28,8 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * DIRECT_DEPENDENCIES only loads reconciliation's own declared list (payments, ledger, integration.psp, audit,
- * money) -- not payments' further dependencies (idempotency, merchant). Stubs stand in for those, the same way
- * PaymentsModuleIntegrationTests stubs the PSP port that is dependency-inverted from payments' own perspective.
+ * money) -- not payments' further dependencies (idempotency, merchant, outbox). Stubs stand in for those, the same
+ * way PaymentsModuleIntegrationTests stubs the PSP port that is dependency-inverted from payments' own perspective.
  */
 @ApplicationModuleTest(ApplicationModuleTest.BootstrapMode.DIRECT_DEPENDENCIES)
 @Import({TestcontainersConfiguration.class, ReconciliationModuleIntegrationTests.StubConfiguration.class})
@@ -69,6 +71,11 @@ class ReconciliationModuleIntegrationTests {
 		@Bean
 		CurrentMerchantResolver currentMerchantResolver() {
 			return () -> new MerchantId(UUID.randomUUID());
+		}
+
+		@Bean
+		OutboxGateway outboxGateway() {
+			return (OutboxEvent event) -> { };
 		}
 
 		@Bean
