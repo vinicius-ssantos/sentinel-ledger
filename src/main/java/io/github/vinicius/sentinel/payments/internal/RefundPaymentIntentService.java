@@ -25,6 +25,8 @@ import io.github.vinicius.sentinel.payments.PaymentIntentDecision;
 import io.github.vinicius.sentinel.payments.PaymentIntentId;
 import io.github.vinicius.sentinel.payments.PaymentIntentStore;
 import io.github.vinicius.sentinel.payments.internal.web.PaymentIntentResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -53,6 +55,7 @@ public class RefundPaymentIntentService {
 	private final AuditGateway auditGateway;
 	private final OutboxGateway outboxGateway;
 	private final ObjectMapper objectMapper;
+	private final MeterRegistry meterRegistry;
 
 	RefundPaymentIntentService(
 		PaymentIntentStore paymentIntentStore,
@@ -60,7 +63,8 @@ public class RefundPaymentIntentService {
 		LedgerPostingPort ledgerPostingPort,
 		AuditGateway auditGateway,
 		OutboxGateway outboxGateway,
-		ObjectMapper objectMapper
+		ObjectMapper objectMapper,
+		MeterRegistry meterRegistry
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.idempotencyGateway = idempotencyGateway;
@@ -68,6 +72,7 @@ public class RefundPaymentIntentService {
 		this.auditGateway = auditGateway;
 		this.outboxGateway = outboxGateway;
 		this.objectMapper = objectMapper;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@Transactional
@@ -162,6 +167,7 @@ public class RefundPaymentIntentService {
 			Instant.now()
 		);
 		ledgerPostingPort.post(transaction);
+		refundResultCounter("SUCCESS", null).increment();
 
 		auditGateway.record(AuditEvent.record(
 			AuditActor.merchant(merchantId.value().toString()),
@@ -202,6 +208,7 @@ public class RefundPaymentIntentService {
 	}
 
 	private ApiResult problemForDeniedRefund(PaymentIntentDecision decision, URI instance) {
+		refundResultCounter("DENIED", decision.errorCode().name()).increment();
 		return switch (decision.errorCode()) {
 			case REFUND_EXCEEDS_CAPTURED_AMOUNT -> problemResult(
 				HttpStatus.CONFLICT, "refund-limit-exceeded", "REFUND_LIMIT_EXCEEDED",
@@ -212,6 +219,18 @@ public class RefundPaymentIntentService {
 				"Invalid payment intent transition", decision.detail(), instance, null
 			);
 		};
+	}
+
+	/**
+	 * Tagged by outcome and, when denied, the fixed {@link io.github.vinicius.sentinel.payments.PaymentIntentErrorCode}
+	 * -- never a payment or merchant identifier, so cardinality cannot grow with traffic.
+	 */
+	private Counter refundResultCounter(String outcome, String reason) {
+		return Counter.builder("sentinel.payments.refund.result")
+			.description("Refund requests resolved, by outcome and (when denied) reason")
+			.tag("outcome", outcome)
+			.tag("reason", reason == null ? "" : reason)
+			.register(meterRegistry);
 	}
 
 	private ApiResult failTerminal(MerchantId merchantId, IdempotencyKey idempotencyKey, ApiResult problem) {

@@ -14,7 +14,10 @@ import io.github.vinicius.sentinel.reconciliation.ReconciliationCaseId;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationCasePort;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationCaseStatus;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationMismatchType;
+import io.github.vinicius.sentinel.reconciliation.ReconciliationOpenOutcome;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationSeverity;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -47,19 +50,22 @@ public class PaymentIntentReconciliationCheckService {
 	private final PspAuthorizationPort pspAuthorizationPort;
 	private final AuthorizationReconciliationPort authorizationReconciliationPort;
 	private final ReconciliationCasePort reconciliationCasePort;
+	private final MeterRegistry meterRegistry;
 
 	PaymentIntentReconciliationCheckService(
 		PaymentIntentStore paymentIntentStore,
 		AuthorizationAttemptEvidencePort attemptEvidencePort,
 		PspAuthorizationPort pspAuthorizationPort,
 		AuthorizationReconciliationPort authorizationReconciliationPort,
-		ReconciliationCasePort reconciliationCasePort
+		ReconciliationCasePort reconciliationCasePort,
+		MeterRegistry meterRegistry
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.attemptEvidencePort = attemptEvidencePort;
 		this.pspAuthorizationPort = pspAuthorizationPort;
 		this.authorizationReconciliationPort = authorizationReconciliationPort;
 		this.reconciliationCasePort = reconciliationCasePort;
+		this.meterRegistry = meterRegistry;
 	}
 
 	public ReconciliationCheckOutcome check(PaymentIntentId paymentIntentId) {
@@ -76,6 +82,11 @@ public class PaymentIntentReconciliationCheckService {
 
 		if (UNCERTAIN_STATES.contains(localState)) {
 			PaymentIntent resolved = authorizationReconciliationPort.applyReconciledResult(paymentIntentId, providerResult);
+			Counter.builder("sentinel.payments.authorization.recovery")
+				.description("Uncertain authorizations resolved through reconciliation, by resulting state")
+				.tag("outcome", resolved.state().name())
+				.register(meterRegistry)
+				.increment();
 			return new ReconciliationCheckOutcome.AutoResolved(resolved.state());
 		}
 
@@ -94,7 +105,15 @@ public class PaymentIntentReconciliationCheckService {
 			ReconciliationMismatchType.AUTHORIZATION_OUTCOME_DIVERGENCE, severity, ReconciliationCaseStatus.OPEN,
 			localEvidence, providerEvidence, Instant.now(), null
 		);
-		return new ReconciliationCheckOutcome.MismatchDetected(reconciliationCasePort.open(candidate));
+		ReconciliationOpenOutcome outcome = reconciliationCasePort.open(candidate);
+		if (outcome instanceof ReconciliationOpenOutcome.Opened) {
+			Counter.builder("sentinel.reconciliation.cases.opened")
+				.description("Reconciliation cases newly opened, by severity")
+				.tag("severity", severity.name())
+				.register(meterRegistry)
+				.increment();
+		}
+		return new ReconciliationCheckOutcome.MismatchDetected(outcome);
 	}
 
 	private static boolean isConsistent(PaymentIntentState localState, PspAuthorizationResult providerResult) {

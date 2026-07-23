@@ -1,0 +1,77 @@
+{
+  "title": "Sentinel Ledger - Reconciliation",
+  "description": "Dashboard-as-code, not a deployed dashboard: import into a Grafana instance pointed at this application's /actuator/prometheus endpoint. See docs/OBSERVABILITY.md.",
+  "schemaVersion": 39,
+  "timezone": "utc",
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Open reconciliation cases by severity",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sentinel_reconciliation_cases_open",
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "description": "sentinel.reconciliation.cases.open gauge, tagged by severity (LOW|HIGH)."
+    },
+    {
+      "id": 2,
+      "title": "Cases opened per hour",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(sentinel_reconciliation_cases_opened_total[1h])",
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "description": "sentinel.reconciliation.cases.opened counter, by severity."
+    },
+    {
+      "id": 3,
+      "title": "Cases resolved per hour, by action",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "rate(sentinel_reconciliation_cases_resolved_total[1h])",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "description": "sentinel.reconciliation.cases.resolved counter, by resolution action."
+    },
+    {
+      "id": 4,
+      "title": "Case age at resolution (p50/p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(sentinel_reconciliation_case_age_seconds_bucket[6h]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(sentinel_reconciliation_case_age_seconds_bucket[6h]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "description": "sentinel.reconciliation.case.age timer, time between detection and resolution."
+    },
+    {
+      "id": 5,
+      "title": "Dead-letter queue depth",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "sentinel_messaging_dead_letter_queue_depth"
+        }
+      ],
+      "description": "sentinel.messaging.dead_letter_queue.depth gauge -- messages that exhausted their retry budget and need operator attention."
+    }
+  ]
+}

@@ -32,7 +32,7 @@ In priority order:
 | `outbox` | Publication intents and their claim/publish/complete lifecycle | shared technical primitives only |
 | `integration.messaging` | RabbitMQ topology, the outbox publisher adapter, and the dispatch consumer's inbox | outbox API, webhooks API |
 | `webhooks` | Signed webhook delivery, delivery history, and the receiver-side signature-verification algorithm | shared technical primitives only |
-| `observability` | Cross-cutting telemetry configuration | public events and technical adapters |
+| `observability` | Correlation propagation and structured logging configuration | shared technical primitives only (today) |
 
 Spring Modulith 2.1 verification runs as part of `mvn verify` and rejects module cycles, access to another module's internal packages, and dependencies not listed by each module's `@ApplicationModule` policy. Detection is explicitly annotated so `integration.psp` remains a first-class module instead of being folded into an intermediate `integration` package. Module APIs belong in their root packages; implementation details belong in subpackages such as `internal`.
 
@@ -55,6 +55,10 @@ The PSP adapter must expose explicit results such as approved, declined, timeout
 ## Reconciliation boundary
 
 Reconciliation is part of the financial correctness proof, not a reporting afterthought. It compares internal payment/ledger evidence with provider evidence, fingerprints mismatches, creates at most one open case per divergence, and records an append-only resolution history. It never edits prior ledger entries; financial repair uses a compensating transaction.
+
+## Observability boundary
+
+`observability` owns only correlation propagation (an `X-Correlation-Id` request/response header placed in the logging MDC ahead of the security filter chain) and structured JSON console logging. Business metrics are not routed through this module: each owning module registers its own Micrometer counters, gauges, and timers directly, tagged exclusively by fixed enum/outcome values so cardinality cannot grow with traffic — the same posture as this document's persistence and reconciliation boundaries applied to telemetry. Distributed tracing is deferred; see [OBSERVABILITY.md](OBSERVABILITY.md) for the full metric catalog, the redaction guarantee, and the dashboard/alert artifacts checked in as dashboard-as-code rather than deployed configuration.
 
 ## Concurrency strategy
 

@@ -4,6 +4,8 @@ import io.github.vinicius.sentinel.webhooks.WebhookDeliveryId;
 import io.github.vinicius.sentinel.webhooks.WebhookDeliveryQueryPort;
 import io.github.vinicius.sentinel.webhooks.WebhookDeliveryRequest;
 import io.github.vinicius.sentinel.webhooks.WebhookDispatchPort;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
@@ -30,15 +32,18 @@ class OutboxEventListener {
 	private final JdbcProcessedMessageGateway processedMessageGateway;
 	private final WebhookDispatchPort webhookDispatchPort;
 	private final WebhookDeliveryQueryPort webhookDeliveryQueryPort;
+	private final MeterRegistry meterRegistry;
 
 	OutboxEventListener(
 		JdbcProcessedMessageGateway processedMessageGateway,
 		WebhookDispatchPort webhookDispatchPort,
-		WebhookDeliveryQueryPort webhookDeliveryQueryPort
+		WebhookDeliveryQueryPort webhookDeliveryQueryPort,
+		MeterRegistry meterRegistry
 	) {
 		this.processedMessageGateway = processedMessageGateway;
 		this.webhookDispatchPort = webhookDispatchPort;
 		this.webhookDeliveryQueryPort = webhookDeliveryQueryPort;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@RabbitListener(queues = "${sentinel.messaging.queue:sentinel.events.q}", containerFactory = "messagingListenerContainerFactory")
@@ -52,6 +57,10 @@ class OutboxEventListener {
 
 		if (webhookDeliveryQueryPort.isDelivered(deliveryId)) {
 			log.debug("duplicate delivery of outbox message {} ignored (already delivered)", messageId);
+			Counter.builder("sentinel.messaging.dispatch.duplicate")
+				.description("Redeliveries of an outbox message that was already fully delivered")
+				.register(meterRegistry)
+				.increment();
 			return;
 		}
 
