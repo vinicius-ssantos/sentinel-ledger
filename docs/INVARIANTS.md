@@ -33,6 +33,8 @@ This document is the correctness contract for Sentinel Ledger. An invariant is n
 | `AUD-001` | Every sensitive business or operator command leaves redacted audit evidence | Audit API in the local business transaction | Integration and timeline tests |
 | `OUT-001` | A committed business change cannot silently lose its outbox publication intent | Outbox event written in the same local transaction as the business effect | Persistence and restart-window tests |
 | `OUT-002` | Multiple workers cannot publish the same claimed outbox record concurrently without detection | `FOR UPDATE SKIP LOCKED` claim plus a stale-claim reclaim sweep | Concurrent-worker and reclaim integration tests |
+| `MSG-001` | Duplicate or redelivered broker messages cannot apply a business effect twice | Consumer inbox keyed by the outbox event id (the AMQP message id) | Duplicate-redelivery integration test |
+| `MSG-002` | A message that repeatedly fails to process stops retrying and becomes an observable dead letter instead of looping forever | Bounded exponential-backoff retry plus dead-letter exchange/queue | Poison-message retry-exhaustion and DLQ-depth integration tests |
 
 ## Change rule
 
