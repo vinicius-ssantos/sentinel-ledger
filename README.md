@@ -254,6 +254,22 @@ The minimum portfolio includes state and monetary invariant tests, balanced-ledg
 
 The required concurrency proof will run at least twenty simultaneous capture requests against one authorized payment and prove that the final captured total never exceeds the authorization. Performance results are invalid if the final invariant checks are omitted.
 
+## Continuous integration
+
+Every pull request and push to `main` runs three independent GitHub Actions workflows/jobs, defined in `.github/workflows/`:
+
+- **Maven verify** (`build.yml`) runs `./mvnw verify` — the exact command documented above for local use, so a clean checkout behaves identically locally and in CI. This includes the full test suite (domain, PostgreSQL/Testcontainers integration, concurrency, and the end-to-end RabbitMQ/webhook suite), Spring Modulith's architecture verification (module cycles and internal-package access fail the build), an OpenAPI contract-drift check against the committed baseline at `docs/openapi/openapi.json` (a change to the API surface must regenerate and knowingly commit that file), and Flyway migration validation from an empty database. Surefire and JaCoCo reports are uploaded as build artifacts for every run, including failures; JaCoCo coverage is informational only — no coverage threshold gates the build, per this project's standing rule that invariant evidence, not a percentage, is the release gate.
+- **Secret scan** (`build.yml`) runs [gitleaks](https://github.com/gitleaks/gitleaks) against the pull request's or push's diff and full git history. A detected secret fails the job; gitleaks redacts the matched value from its own output, so no secret is ever printed to a log.
+- **Dependency review** (`build.yml`, pull requests only) uses GitHub's own `dependency-review-action` to block a PR that introduces a new dependency with a known high-or-critical severity vulnerability. It does not re-scan dependencies already in the tree — those are covered by GitHub Dependabot alerts on this repository (a platform feature, not a CI job), which is a real scope gap: a newly-disclosed vulnerability in an existing dependency will surface as a Dependabot alert, not a failed CI run.
+- **Validate documentation** (`documentation.yml`) runs `python3 scripts/validate_docs.py` — trailing whitespace, relative Markdown links, and the agent-instruction contract described in `AGENTS.md`.
+
+Known limitations, stated plainly:
+
+- **No SBOM per pull request.** A CycloneDX SBOM can be generated on demand with `./mvnw -Psbom package`, but it is not wired into CI — it is scoped to run before the project's first tagged release, not on every change.
+- **No container image scanning.** This repository does not build or publish a container image yet; scanning is deferred until one exists.
+- **No OpenTelemetry trace verification in CI.** Distributed tracing itself is not yet implemented (see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md)).
+- **The dependency-review job only covers new dependencies introduced by a given PR**, as described above.
+
 ## Observability and security
 
 Telemetry will correlate API, database, simulated PSP, and future broker operations with business identifiers. No latency or throughput promise will be published without a reproducible benchmark environment.
