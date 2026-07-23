@@ -1,0 +1,80 @@
+# Prometheus alerting rules for Sentinel Ledger.
+#
+# This file is dashboard-as-code, not a deployed alert set -- no Alertmanager runs in compose.yaml today. It is
+# checked in so the rules and their operator-facing annotations are reviewable, and so they can be loaded by a real
+# Prometheus/Alertmanager pointed at this application's /actuator/prometheus endpoint when one exists. See
+# docs/OBSERVABILITY.md.
+groups:
+  - name: sentinel-ledger.reconciliation
+    rules:
+      - alert: SentinelHighSeverityReconciliationCaseOpen
+        expr: sentinel_reconciliation_cases_open{severity="HIGH"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A HIGH-severity reconciliation case has been open for 15+ minutes"
+          description: >-
+            A financial-state mismatch (internal ledger/payment state disagrees with the simulated PSP) is
+            unresolved. Action: open GET /api/v1/reconciliation/cases?status=OPEN as an operator, review the
+            oldest HIGH-severity case's local and provider evidence, and resolve it via
+            POST /api/v1/reconciliation/cases/{id}/resolve once the correct outcome is confirmed with the
+            provider.
+
+      - alert: SentinelReconciliationCaseResolutionSlow
+        expr: histogram_quantile(0.95, rate(sentinel_reconciliation_case_age_seconds_bucket[6h])) > 3600
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 reconciliation case resolution time exceeds 1 hour"
+          description: >-
+            Cases are piling up faster than operators are resolving them. Action: check the open-case gauge by
+            severity, confirm on-call staffing for reconciliation review, and investigate whether the stale
+            authorization sweep (sentinel.reconciliation.sweep-interval) is producing more mismatches than usual.
+
+  - name: sentinel-ledger.messaging
+    rules:
+      - alert: SentinelDeadLetterQueueNotEmpty
+        expr: sentinel_messaging_dead_letter_queue_depth > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "One or more outbox events exhausted their retry budget"
+          description: >-
+            A webhook or downstream delivery permanently failed after sentinel.messaging.max-attempts retries.
+            Action: inspect the RabbitMQ management UI's dead-letter queue for the failed message bodies, check
+            the corresponding webhook_deliveries row's last_error via the payment timeline, and manually
+            re-publish or escalate to the merchant integration owner.
+
+      - alert: SentinelWebhookDeliveryFailureRateHigh
+        expr: |
+          rate(sentinel_webhooks_delivery_result_total{result="FAILED"}[15m])
+          / clamp_min(rate(sentinel_webhooks_delivery_result_total[15m]), 1e-9) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over half of recent webhook deliveries are failing"
+          description: >-
+            The merchant's registered endpoint is likely down or rejecting requests. Action: verify
+            sentinel.webhook.url is reachable, check the endpoint's own status, and confirm the signing secret
+            has not silently rotated out of sync (see the secret-rotation window in docs/OBSERVABILITY.md).
+
+  - name: sentinel-ledger.payments
+    rules:
+      - alert: SentinelAuthorizationUncertaintyRateHigh
+        expr: |
+          rate(sentinel_payments_authorization_result_total{outcome="AUTHORIZATION_UNKNOWN"}[15m])
+          / clamp_min(rate(sentinel_payments_authorization_result_total[15m]), 1e-9) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over 20% of recent authorizations are ending in AUTHORIZATION_UNKNOWN"
+          description: >-
+            The simulated PSP is timing out or returning ambiguous results unusually often. Action: check the
+            PSP simulation's programmed failure rate for this environment, confirm the stale-authorization sweep
+            is running (sentinel.reconciliation.sweep-interval), and watch sentinel_payments_authorization_recovery_total
+            to confirm uncertain authorizations are still resolving.

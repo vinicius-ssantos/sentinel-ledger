@@ -38,6 +38,8 @@ This document is the correctness contract for Sentinel Ledger. An invariant is n
 | `WHK-001` | Every webhook request is signed and timestamped, and a receiver can reject an invalid, expired, or replayed one | HMAC-SHA256 over `timestamp.deliveryId.body`; verification reference implementation | Signature, expiry, and replay-rejection tests |
 | `WHK-002` | A webhook delivery retried after success cannot re-notify the merchant, and its identity is preserved across every retry | Delivery-status-gated dedup keyed by the outbox event id | Duplicate-delivery and identity-preserved-across-retries integration tests |
 | `WHK-003` | Webhook delivery success and final failure are visible on the payment timeline | Delivery history read into `PaymentIntentTimelineService` | Timeline integration test asserting both outcomes |
+| `OBS-001` | No business metric is tagged by an unbounded identifier | Fixed enum/outcome tag values only, never a payment, merchant, case, or delivery id | Structural cardinality-safety integration test |
+| `OBS-002` | Secrets and forbidden fields never appear in structured logs | Allowlisted log fields only; no request/response body or credential logging | Captured-log-output redaction test |
 
 ## Change rule
 

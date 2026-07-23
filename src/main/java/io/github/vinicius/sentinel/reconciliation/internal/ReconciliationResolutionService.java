@@ -21,9 +21,13 @@ import io.github.vinicius.sentinel.reconciliation.ReconciliationCasePort;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationCaseStatus;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationResolution;
 import io.github.vinicius.sentinel.reconciliation.ReconciliationResolutionAction;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -43,17 +47,20 @@ public class ReconciliationResolutionService {
 	private final PaymentIntentStore paymentIntentStore;
 	private final LedgerPostingPort ledgerPostingPort;
 	private final AuditGateway auditGateway;
+	private final MeterRegistry meterRegistry;
 
 	ReconciliationResolutionService(
 		ReconciliationCasePort reconciliationCasePort,
 		PaymentIntentStore paymentIntentStore,
 		LedgerPostingPort ledgerPostingPort,
-		AuditGateway auditGateway
+		AuditGateway auditGateway,
+		MeterRegistry meterRegistry
 	) {
 		this.reconciliationCasePort = reconciliationCasePort;
 		this.paymentIntentStore = paymentIntentStore;
 		this.ledgerPostingPort = ledgerPostingPort;
 		this.auditGateway = auditGateway;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@Transactional
@@ -73,6 +80,17 @@ public class ReconciliationResolutionService {
 		Instant now = Instant.now();
 		ReconciliationResolution resolution = new ReconciliationResolution(operatorId, reason, action, compensatingReference, now);
 		ReconciliationCase resolved = reconciliationCasePort.resolve(caseId, resolution);
+
+		Counter.builder("sentinel.reconciliation.cases.resolved")
+			.description("Reconciliation cases resolved, by resolution action")
+			.tag("action", action.name())
+			.register(meterRegistry)
+			.increment();
+		Timer.builder("sentinel.reconciliation.case.age")
+			.description("Time between detection and resolution of a reconciliation case")
+			.tag("action", action.name())
+			.register(meterRegistry)
+			.record(Duration.between(existing.detectedAt(), now));
 
 		auditGateway.record(AuditEvent.record(
 			new AuditActor(AuditActorType.OPERATOR, operatorId.value().toString()),

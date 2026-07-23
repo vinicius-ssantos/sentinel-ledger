@@ -18,6 +18,8 @@ import io.github.vinicius.sentinel.payments.PaymentIntentStore;
 import io.github.vinicius.sentinel.payments.PspAttemptId;
 import io.github.vinicius.sentinel.payments.PspAuthorizationResult;
 import io.github.vinicius.sentinel.payments.internal.web.PaymentIntentResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -46,19 +48,22 @@ class AuthorizePaymentIntentSteps {
 	private final IdempotencyGateway idempotencyGateway;
 	private final AuditGateway auditGateway;
 	private final ObjectMapper objectMapper;
+	private final MeterRegistry meterRegistry;
 
 	AuthorizePaymentIntentSteps(
 		PaymentIntentStore paymentIntentStore,
 		AuthorizationAttemptStore attemptStore,
 		IdempotencyGateway idempotencyGateway,
 		AuditGateway auditGateway,
-		ObjectMapper objectMapper
+		ObjectMapper objectMapper,
+		MeterRegistry meterRegistry
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.attemptStore = attemptStore;
 		this.idempotencyGateway = idempotencyGateway;
 		this.auditGateway = auditGateway;
 		this.objectMapper = objectMapper;
+		this.meterRegistry = meterRegistry;
 	}
 
 	@Transactional
@@ -173,6 +178,7 @@ class AuthorizePaymentIntentSteps {
 				paymentIntent = paymentIntentStore.findOwned(paymentIntentId, merchantId)
 					.orElseThrow(() -> new IllegalStateException("payment intent disappeared mid-authorization: " + paymentIntentId));
 			}
+			authorizationResultCounter(paymentIntent.state()).increment();
 		}
 
 		ApiResult response = successResult(paymentIntent);
@@ -196,6 +202,17 @@ class AuthorizePaymentIntentSteps {
 			return paymentIntent.failAuthorization(now);
 		}
 		throw new IllegalArgumentException("unsupported PSP authorization result: " + result);
+	}
+
+	/**
+	 * Tagged by the resulting {@link PaymentIntentState} -- a fixed, small enum, never a payment or merchant
+	 * identifier, so this metric's cardinality cannot grow with traffic.
+	 */
+	private Counter authorizationResultCounter(PaymentIntentState state) {
+		return Counter.builder("sentinel.payments.authorization.result")
+			.description("Authorization attempts resolved, by resulting state")
+			.tag("outcome", state.name())
+			.register(meterRegistry);
 	}
 
 	private ApiResult successResult(PaymentIntent paymentIntent) {

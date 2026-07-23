@@ -34,7 +34,7 @@ class SecurityConfig {
 			.csrf(AbstractHttpConfigurer::disable)
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(authorize -> authorize
-				.requestMatchers("/actuator/health", "/actuator/info").permitAll()
+				.requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
 				.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 				.requestMatchers("/api/v1/reconciliation/**").hasRole("OPERATOR")
 				.requestMatchers("/api/**").authenticated()
