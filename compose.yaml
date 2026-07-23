@@ -15,5 +15,22 @@ services:
     volumes:
       - sentinel-postgres-data:/var/lib/postgresql/data
 
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${SENTINEL_RABBITMQ_USERNAME:-guest}
+      RABBITMQ_DEFAULT_PASS: ${SENTINEL_RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "${SENTINEL_RABBITMQ_PORT:-5672}:5672"
+      - "${SENTINEL_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - sentinel-rabbitmq-data:/var/lib/rabbitmq
+
 volumes:
   sentinel-postgres-data:
+  sentinel-rabbitmq-data:

@@ -30,6 +30,7 @@ In priority order:
 | `merchant` | Merchant configuration and access context | shared technical primitives only |
 | `audit` | Audit events and actor evidence | shared technical primitives only |
 | `outbox` | Publication intents and their claim/publish/complete lifecycle | shared technical primitives only |
+| `integration.messaging` | RabbitMQ topology, the outbox publisher adapter, and the dispatch consumer's inbox | outbox API |
 | `observability` | Cross-cutting telemetry configuration | public events and technical adapters |
 
 Spring Modulith 2.1 verification runs as part of `mvn verify` and rejects module cycles, access to another module's internal packages, and dependencies not listed by each module's `@ApplicationModule` policy. Detection is explicitly annotated so `integration.psp` remains a first-class module instead of being folded into an intermediate `integration` package. Module APIs belong in their root packages; implementation details belong in subpackages such as `internal`.
@@ -66,7 +67,9 @@ Every concurrency benchmark must run final invariant assertions. Throughput with
 
 Domain events may be used for module decoupling inside the monolith. External broker publication is deferred to the reliability phase.
 
-The `outbox` module persists the business change and its publication intent in the same local transaction (`capture`/`refund` today) and dispatches through a separate claim/publish/complete cycle, so a crash between commit and delivery loses no event and a slow or failing publish never holds a lock. Delivery is at-least-once; consumers must tolerate duplicates. Until RabbitMQ is introduced (issue #22), publication is a logging placeholder — the persisted intent and its lifecycle are real, but nothing outside the process consumes it yet. Consumers introduced later will use an inbox or equivalent unique processing record to tolerate duplicate delivery.
+The `outbox` module persists the business change and its publication intent in the same local transaction (`capture`/`refund` today) and dispatches through a separate claim/publish/complete cycle, so a crash between commit and delivery loses no event and a slow or failing publish never holds a lock. Delivery is at-least-once; consumers must tolerate duplicates.
+
+`integration.messaging` implements the outbox's publisher port against RabbitMQ, behind `sentinel.messaging.enabled` (default off, so no module in the codebase requires a broker to run its own tests). A topic exchange carries every outbox event; the dispatch queue's consumer retries a failing message with bounded exponential backoff, then rejects it to a dead-letter exchange/queue instead of retrying forever, and deduplicates redelivery through an inbox table keyed by the outbox event id (the AMQP message id) — the inbox this document previously described as a future requirement now exists. A publish that the broker never confirms (outage, unreachable) throws back into the outbox worker, which leaves the record claimed for retry rather than marking it published, so a broker outage delays delivery without losing the event.
 
 ## Modern Java policy
 
