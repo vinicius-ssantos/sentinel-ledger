@@ -14,6 +14,9 @@ import io.github.vinicius.sentinel.payments.PspAuthorizationPort;
 import io.github.vinicius.sentinel.payments.PspAuthorizationRequest;
 import io.github.vinicius.sentinel.payments.PspAuthorizationResult;
 import io.github.vinicius.sentinel.payments.PspProviderReference;
+import io.github.vinicius.sentinel.webhooks.WebhookDeliveryId;
+import io.github.vinicius.sentinel.webhooks.WebhookDeliveryQueryPort;
+import io.github.vinicius.sentinel.webhooks.WebhookDeliveryRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -24,14 +27,16 @@ import org.springframework.modulith.test.ApplicationModuleTest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * DIRECT_DEPENDENCIES only loads reconciliation's own declared list (payments, ledger, integration.psp, audit,
- * money) -- not payments' further dependencies (idempotency, merchant, outbox). Stubs stand in for those, the same
- * way PaymentsModuleIntegrationTests stubs the PSP port that is dependency-inverted from payments' own perspective.
+ * money) -- not payments' further dependencies (idempotency, merchant, outbox, webhooks). Stubs stand in for
+ * those, the same way PaymentsModuleIntegrationTests stubs the PSP port that is dependency-inverted from payments'
+ * own perspective.
  */
 @ApplicationModuleTest(ApplicationModuleTest.BootstrapMode.DIRECT_DEPENDENCIES)
 @Import({TestcontainersConfiguration.class, ReconciliationModuleIntegrationTests.StubConfiguration.class})
@@ -76,6 +81,21 @@ class ReconciliationModuleIntegrationTests {
 		@Bean
 		OutboxGateway outboxGateway() {
 			return (OutboxEvent event) -> { };
+		}
+
+		@Bean
+		WebhookDeliveryQueryPort webhookDeliveryQueryPort() {
+			return new WebhookDeliveryQueryPort() {
+				@Override
+				public List<WebhookDeliveryRecord> findByAggregate(String aggregateType, String aggregateId) {
+					return List.of();
+				}
+
+				@Override
+				public boolean isDelivered(WebhookDeliveryId id) {
+					return false;
+				}
+			};
 		}
 
 		@Bean

@@ -35,6 +35,9 @@ This document is the correctness contract for Sentinel Ledger. An invariant is n
 | `OUT-002` | Multiple workers cannot publish the same claimed outbox record concurrently without detection | `FOR UPDATE SKIP LOCKED` claim plus a stale-claim reclaim sweep | Concurrent-worker and reclaim integration tests |
 | `MSG-001` | Duplicate or redelivered broker messages cannot apply a business effect twice | Consumer inbox keyed by the outbox event id (the AMQP message id) | Duplicate-redelivery integration test |
 | `MSG-002` | A message that repeatedly fails to process stops retrying and becomes an observable dead letter instead of looping forever | Bounded exponential-backoff retry plus dead-letter exchange/queue | Poison-message retry-exhaustion and DLQ-depth integration tests |
+| `WHK-001` | Every webhook request is signed and timestamped, and a receiver can reject an invalid, expired, or replayed one | HMAC-SHA256 over `timestamp.deliveryId.body`; verification reference implementation | Signature, expiry, and replay-rejection tests |
+| `WHK-002` | A webhook delivery retried after success cannot re-notify the merchant, and its identity is preserved across every retry | Delivery-status-gated dedup keyed by the outbox event id | Duplicate-delivery and identity-preserved-across-retries integration tests |
+| `WHK-003` | Webhook delivery success and final failure are visible on the payment timeline | Delivery history read into `PaymentIntentTimelineService` | Timeline integration test asserting both outcomes |
 
 ## Change rule
 

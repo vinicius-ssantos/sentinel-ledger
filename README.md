@@ -31,9 +31,9 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 
 ## Project status
 
-**Current phase: Phase 1 (executable modular foundation) and Phase 2 (financial correctness and recovery) deliverables are implemented; Phase 3 (async reliability and observability) has a transactional outbox and a RabbitMQ publisher/consumer with retry and dead-lettering. Webhooks and observability are not yet implemented.**
+**Current phase: Phase 1 (executable modular foundation) and Phase 2 (financial correctness and recovery) deliverables are implemented; Phase 3 (async reliability and observability) has a transactional outbox, a RabbitMQ publisher/consumer with retry and dead-lettering, and signed webhook delivery with replay-protected verification. Structured observability is not yet implemented.**
 
-The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund/reconciliation-resolution command in the same local transaction as its business effect. A payment intent's timeline correlates that audit evidence with resolved provider results and ledger postings, and a merchant can browse their own ledger account's entries with keyset (not offset) cursor pagination. The `reconciliation` module detects authorization outcome divergence between local and simulated-provider evidence (on-demand and via a scheduled sweep for stuck uncertain authorizations), deduplicates open cases by fingerprint, and lets a separately authenticated operator resolve a case with a compensating ledger transaction when funds need reversing. The `outbox` module persists a publication intent in the same local transaction as capture and refund, then claims, dispatches, and completes it through a separate cycle so a crash between commit and delivery loses no event. The `integration.messaging` module implements delivery against RabbitMQ (behind `sentinel.messaging.enabled`, off by default so no test in the suite needs a broker): a topic exchange fans events out, a consumer deduplicates redelivery through an inbox table keyed by the outbox event id, and a message that keeps failing retries with bounded exponential backoff before landing in a dead-letter queue instead of looping forever. Production-readiness claims remain intentionally unimplemented.
+The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund/reconciliation-resolution command in the same local transaction as its business effect. A payment intent's timeline correlates that audit evidence with resolved provider results and ledger postings, and a merchant can browse their own ledger account's entries with keyset (not offset) cursor pagination. The `reconciliation` module detects authorization outcome divergence between local and simulated-provider evidence (on-demand and via a scheduled sweep for stuck uncertain authorizations), deduplicates open cases by fingerprint, and lets a separately authenticated operator resolve a case with a compensating ledger transaction when funds need reversing. The `outbox` module persists a publication intent in the same local transaction as capture and refund, then claims, dispatches, and completes it through a separate cycle so a crash between commit and delivery loses no event. The `integration.messaging` module implements delivery against RabbitMQ (behind `sentinel.messaging.enabled`, off by default so no test in the suite needs a broker): a topic exchange fans events out, and a message that keeps failing retries with bounded exponential backoff before landing in a dead-letter queue instead of looping forever. Its consumer turns each event into a signed, timestamped webhook call through the `webhooks` module (HMAC-SHA256 over the timestamp, delivery id, and body); a redelivered message is deduplicated by delivery *status*, not mere consumption, so a genuinely failed delivery still retries while an already-succeeded one is never re-sent, and both success and final failure are recorded and surface on the payment timeline. `webhooks` also exposes `WebhookSignatureVerifier`, the reference a receiver follows to reject an invalid, expired, or replayed callback. Production-readiness claims remain intentionally unimplemented.
 
 ## Local development
 
@@ -121,6 +121,9 @@ These capabilities may be evaluated later only through measured requirements and
 17. Multiple workers cannot publish the same claimed outbox record concurrently without detection.
 18. Duplicate or redelivered broker messages cannot apply a business effect twice.
 19. A message that repeatedly fails to process stops retrying and becomes an observable dead letter instead of looping forever.
+20. Every webhook request is signed and timestamped, and a receiver can reject an invalid, expired, or replayed one.
+21. A webhook delivery retried after success cannot re-notify the merchant, and its identity is preserved across every retry.
+22. Webhook delivery success and final failure are visible on the payment timeline.
 
 Each rule has a stable identifier, enforcement point, and proof requirement in [docs/INVARIANTS.md](docs/INVARIANTS.md).
 
@@ -136,7 +139,9 @@ flowchart TD
     Payments --> Ledger["ledger"]
     Payments --> Audit["audit"]
     Payments --> Outbox["outbox"]
+    Payments --> Webhooks["webhooks"]
     Messaging["integration.messaging"] --> Outbox
+    Messaging --> Webhooks
     Reconciliation --> PSP
     Reconciliation --> Ledger
     Idempotency --> DB[("PostgreSQL")]
@@ -146,8 +151,10 @@ flowchart TD
     Reconciliation --> DB
     Outbox --> DB
     Messaging --> DB
+    Webhooks --> DB
     PSP --> Fake["Simulated PSP / WireMock"]
     Messaging --> Broker["RabbitMQ"]
+    Webhooks --> Merchant["Merchant's registered endpoint"]
 ```
 
 ### Planned modules
@@ -162,7 +169,8 @@ flowchart TD
 | `merchant` | Merchant identity and configuration for the single-merchant MVP |
 | `audit` | Append-only evidence of sensitive business and operator actions |
 | `outbox` | Transactional publication intents and their claim/publish/complete lifecycle |
-| `integration.messaging` | RabbitMQ topology, outbox publisher adapter, and dispatch consumer inbox |
+| `integration.messaging` | RabbitMQ topology, outbox publisher adapter, and dispatch consumer |
+| `webhooks` | Signed webhook delivery, delivery history, and receiver-side signature verification |
 | `observability` | Correlation, business metrics, traces, and operational health |
 
 Spring Modulith will verify dependencies, reject cycles and access to internal packages, and support module-focused tests and documentation.

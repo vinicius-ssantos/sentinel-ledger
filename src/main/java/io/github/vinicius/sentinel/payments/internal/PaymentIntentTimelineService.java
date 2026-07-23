@@ -5,8 +5,11 @@ import io.github.vinicius.sentinel.audit.AuditTrailPort;
 import io.github.vinicius.sentinel.ledger.LedgerTransaction;
 import io.github.vinicius.sentinel.ledger.LedgerPostingPort;
 import io.github.vinicius.sentinel.payments.PaymentIntentId;
+import io.github.vinicius.sentinel.webhooks.WebhookDeliveryQueryPort;
+import io.github.vinicius.sentinel.webhooks.WebhookDeliveryRecord;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -14,9 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Correlates the four evidence sources docs/INVARIANTS.md's {@code Demonstration} proof level asks a timeline to
- * connect: payment transitions and command actors (audit events), provider results (resolved PSP evidence), and
- * ledger postings. Read-only; never opens a write transaction.
+ * Correlates the evidence sources docs/INVARIANTS.md's {@code Demonstration} proof level asks a timeline to
+ * connect: payment transitions and command actors (audit events), provider results (resolved PSP evidence),
+ * ledger postings, and webhook delivery history. Read-only; never opens a write transaction.
  */
 @Service
 public class PaymentIntentTimelineService {
@@ -26,13 +29,16 @@ public class PaymentIntentTimelineService {
 	private final AuditTrailPort auditTrailPort;
 	private final AuthorizationAttemptStore attemptStore;
 	private final LedgerPostingPort ledgerPostingPort;
+	private final WebhookDeliveryQueryPort webhookDeliveryQueryPort;
 
 	PaymentIntentTimelineService(
-		AuditTrailPort auditTrailPort, AuthorizationAttemptStore attemptStore, LedgerPostingPort ledgerPostingPort
+		AuditTrailPort auditTrailPort, AuthorizationAttemptStore attemptStore, LedgerPostingPort ledgerPostingPort,
+		WebhookDeliveryQueryPort webhookDeliveryQueryPort
 	) {
 		this.auditTrailPort = auditTrailPort;
 		this.attemptStore = attemptStore;
 		this.ledgerPostingPort = ledgerPostingPort;
+		this.webhookDeliveryQueryPort = webhookDeliveryQueryPort;
 	}
 
 	public List<TimelineEntry> timeline(PaymentIntentId paymentIntentId) {
@@ -66,6 +72,20 @@ public class PaymentIntentTimelineService {
 					? "ledger.capture" : "ledger.refund";
 				entries.add(new TimelineEntry(TimelineEntryType.LEDGER_TRANSACTION, label, transaction.postedAt(), details));
 			}
+		}
+
+		for (WebhookDeliveryRecord delivery : webhookDeliveryQueryPort.findByAggregate(RESOURCE_TYPE, resourceId)) {
+			Map<String, String> details = new LinkedHashMap<>();
+			details.put("eventType", delivery.eventType());
+			details.put("status", delivery.status().name());
+			details.put("attemptCount", String.valueOf(delivery.attemptCount()));
+			if (delivery.lastError() != null) {
+				details.put("lastError", delivery.lastError());
+			}
+			Instant occurredAt = delivery.deliveredAt() != null ? delivery.deliveredAt() : delivery.createdAt();
+			entries.add(new TimelineEntry(
+				TimelineEntryType.WEBHOOK_DELIVERY, "webhook." + delivery.status().name().toLowerCase(), occurredAt, details
+			));
 		}
 
 		entries.sort(Comparator.comparing(TimelineEntry::occurredAt));
