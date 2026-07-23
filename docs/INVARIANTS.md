@@ -31,6 +31,8 @@ This document is the correctness contract for Sentinel Ledger. An invariant is n
 | `REC-001` | The same unresolved mismatch does not create duplicate open cases | Reconciliation fingerprint and uniqueness policy | Repeated-run integration test |
 | `REC-002` | Resolution preserves the original evidence and actor reason | Append-only case history and audit event | Operator resolution test |
 | `AUD-001` | Every sensitive business or operator command leaves redacted audit evidence | Audit API in the local business transaction | Integration and timeline tests |
+| `OUT-001` | A committed business change cannot silently lose its outbox publication intent | Outbox event written in the same local transaction as the business effect | Persistence and restart-window tests |
+| `OUT-002` | Multiple workers cannot publish the same claimed outbox record concurrently without detection | `FOR UPDATE SKIP LOCKED` claim plus a stale-claim reclaim sweep | Concurrent-worker and reclaim integration tests |
 
 ## Change rule
 

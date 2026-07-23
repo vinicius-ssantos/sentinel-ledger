@@ -22,13 +22,14 @@ In priority order:
 | Module | Owns | May depend on |
 | --- | --- | --- |
 | `money` | Immutable monetary amounts and explicit currency metadata | JDK only |
-| `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | money API, merchant API, ledger API, idempotency API, audit API |
+| `payments` | Payment intents, authorizations, captures, refunds, and the provider-neutral PSP port | money API, merchant API, ledger API, idempotency API, audit API, outbox API |
 | `ledger` | Ledger accounts, transactions, entries, projections | money API, audit API |
 | `reconciliation` | Cases, mismatch rules, resolutions | money API, payments API, ledger API, PSP port, audit API |
 | `idempotency` | Keys, request hashes, stored outcomes | shared technical primitives only |
 | `integration.psp` | Provider requests, results, callbacks, and the simulated provider adapter | payments PSP port and public events |
 | `merchant` | Merchant configuration and access context | shared technical primitives only |
 | `audit` | Audit events and actor evidence | shared technical primitives only |
+| `outbox` | Publication intents and their claim/publish/complete lifecycle | shared technical primitives only |
 | `observability` | Cross-cutting telemetry configuration | public events and technical adapters |
 
 Spring Modulith 2.1 verification runs as part of `mvn verify` and rejects module cycles, access to another module's internal packages, and dependencies not listed by each module's `@ApplicationModule` policy. Detection is explicitly annotated so `integration.psp` remains a first-class module instead of being folded into an intermediate `integration` package. Module APIs belong in their root packages; implementation details belong in subpackages such as `internal`.
@@ -65,7 +66,7 @@ Every concurrency benchmark must run final invariant assertions. Throughput with
 
 Domain events may be used for module decoupling inside the monolith. External broker publication is deferred to the reliability phase.
 
-When RabbitMQ is introduced, a transactional outbox will persist the business change and publication intent in the same local transaction. Consumers will use an inbox or equivalent unique processing record to tolerate duplicate delivery.
+The `outbox` module persists the business change and its publication intent in the same local transaction (`capture`/`refund` today) and dispatches through a separate claim/publish/complete cycle, so a crash between commit and delivery loses no event and a slow or failing publish never holds a lock. Delivery is at-least-once; consumers must tolerate duplicates. Until RabbitMQ is introduced (issue #22), publication is a logging placeholder — the persisted intent and its lifecycle are real, but nothing outside the process consumes it yet. Consumers introduced later will use an inbox or equivalent unique processing record to tolerate duplicate delivery.
 
 ## Modern Java policy
 

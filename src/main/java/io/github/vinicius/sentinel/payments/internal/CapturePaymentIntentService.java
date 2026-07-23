@@ -17,6 +17,8 @@ import io.github.vinicius.sentinel.ledger.LedgerTransactionId;
 import io.github.vinicius.sentinel.merchant.MerchantId;
 import io.github.vinicius.sentinel.money.Currency;
 import io.github.vinicius.sentinel.money.Money;
+import io.github.vinicius.sentinel.outbox.OutboxEvent;
+import io.github.vinicius.sentinel.outbox.OutboxGateway;
 import io.github.vinicius.sentinel.payments.OptimisticLockException;
 import io.github.vinicius.sentinel.payments.PaymentIntent;
 import io.github.vinicius.sentinel.payments.PaymentIntentDecision;
@@ -49,6 +51,7 @@ public class CapturePaymentIntentService {
 	private final IdempotencyGateway idempotencyGateway;
 	private final LedgerPostingPort ledgerPostingPort;
 	private final AuditGateway auditGateway;
+	private final OutboxGateway outboxGateway;
 	private final ObjectMapper objectMapper;
 
 	CapturePaymentIntentService(
@@ -56,12 +59,14 @@ public class CapturePaymentIntentService {
 		IdempotencyGateway idempotencyGateway,
 		LedgerPostingPort ledgerPostingPort,
 		AuditGateway auditGateway,
+		OutboxGateway outboxGateway,
 		ObjectMapper objectMapper
 	) {
 		this.paymentIntentStore = paymentIntentStore;
 		this.idempotencyGateway = idempotencyGateway;
 		this.ledgerPostingPort = ledgerPostingPort;
 		this.auditGateway = auditGateway;
+		this.outboxGateway = outboxGateway;
 		this.objectMapper = objectMapper;
 	}
 
@@ -169,6 +174,20 @@ public class CapturePaymentIntentService {
 				"capturedAmountInMinorUnits", amount.amountInMinorUnitsText(),
 				"currency", amount.currency().code()
 			),
+			Instant.now()
+		));
+
+		outboxGateway.enqueue(OutboxEvent.enqueue(
+			"payment_intent",
+			paymentIntentId.value().toString(),
+			"payment.captured",
+			writeJson(Map.of(
+				"paymentIntentId", paymentIntentId.value().toString(),
+				"merchantId", merchantId.value().toString(),
+				"capturedAmountInMinorUnits", amount.amountInMinorUnitsText(),
+				"currency", amount.currency().code(),
+				"state", paymentIntent.state().name()
+			)),
 			Instant.now()
 		));
 
