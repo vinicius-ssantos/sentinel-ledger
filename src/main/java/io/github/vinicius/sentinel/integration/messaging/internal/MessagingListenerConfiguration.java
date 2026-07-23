@@ -1,10 +1,10 @@
 package io.github.vinicius.sentinel.integration.messaging.internal;
 
+import io.github.vinicius.sentinel.webhooks.WebhookDispatchPort;
 import org.aopalliance.intercept.MethodInterceptor;
 import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,23 +12,25 @@ import org.springframework.core.retry.RetryPolicy;
 
 /**
  * Retries happen in-process (stateless: the message stays unacked on the channel while attempts run), so a poison
- * message never leaves the broker until the budget is exhausted. The last attempt's recoverer rejects without
- * requeue, which the queue's dead-letter argument turns into a hand-off to the dead-letter queue instead of an
- * infinite redelivery loop.
+ * message never leaves the broker until the budget is exhausted. The last attempt's recoverer marks the webhook
+ * delivery failed and rejects without requeue, which the queue's dead-letter argument turns into a hand-off to the
+ * dead-letter queue instead of an infinite redelivery loop.
  */
 @Configuration
 @ConditionalOnProperty(prefix = "sentinel.messaging", name = "enabled", havingValue = "true")
 class MessagingListenerConfiguration {
 
 	@Bean
-	SimpleRabbitListenerContainerFactory messagingListenerContainerFactory(ConnectionFactory connectionFactory, MessagingProperties properties) {
+	SimpleRabbitListenerContainerFactory messagingListenerContainerFactory(
+		ConnectionFactory connectionFactory, MessagingProperties properties, WebhookDispatchPort webhookDispatchPort
+	) {
 		SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
 		factory.setConnectionFactory(connectionFactory);
-		factory.setAdviceChain(retryInterceptor(properties));
+		factory.setAdviceChain(retryInterceptor(properties, webhookDispatchPort));
 		return factory;
 	}
 
-	private MethodInterceptor retryInterceptor(MessagingProperties properties) {
+	private MethodInterceptor retryInterceptor(MessagingProperties properties, WebhookDispatchPort webhookDispatchPort) {
 		RetryPolicy retryPolicy = RetryPolicy.builder()
 			.maxRetries(properties.maxAttempts())
 			.delay(properties.initialInterval())
@@ -38,7 +40,7 @@ class MessagingListenerConfiguration {
 
 		return RetryInterceptorBuilder.stateless()
 			.retryPolicy(retryPolicy)
-			.recoverer(new RejectAndDontRequeueRecoverer())
+			.recoverer(new WebhookExhaustionRecoverer(webhookDispatchPort))
 			.build();
 	}
 }
