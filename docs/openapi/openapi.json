@@ -1,0 +1,927 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Sentinel Ledger API",
+    "description" : "Payment orchestration with an immutable double-entry ledger, persistent idempotency, reconciliation, and observability.",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "http://localhost",
+    "description" : "Generated server url"
+  } ],
+  "paths" : {
+    "/api/v1/reconciliation/checks/payment-intents/{id}" : {
+      "post" : {
+        "tags" : [ "reconciliation-controller" ],
+        "summary" : "Run an on-demand reconciliation check for one payment intent",
+        "description" : "Compares local state against a fresh provider status lookup. Safely auto-resolves an uncertain local state; opens (or returns the existing) case for a genuine divergence.",
+        "operationId" : "check",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Check completed",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconciliationCheckResponse"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "No such payment intent",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconciliationCheckResponse"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "operatorBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/reconciliation/cases/{id}/resolve" : {
+      "post" : {
+        "tags" : [ "reconciliation-controller" ],
+        "summary" : "Record an operator resolution",
+        "description" : "Requires an authenticated operator, a non-blank reason, and explicit confirmation. COMPENSATE posts a new compensating ledger transaction; the original evidence is never edited.",
+        "operationId" : "resolve",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResolveReconciliationCaseRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Case resolved",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconciliationCaseResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Missing reason or confirmation",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconciliationCaseResponse"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "No such case",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconciliationCaseResponse"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "Case is already resolved or ignored",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconciliationCaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "operatorBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/payment-intents" : {
+      "post" : {
+        "tags" : [ "payment-intent-controller" ],
+        "summary" : "Create a payment intent",
+        "description" : "Creates a payment intent owned by the authenticated merchant in the CREATED state. Requires an Idempotency-Key header; replaying the same key and body returns the original result.",
+        "operationId" : "create",
+        "parameters" : [ {
+          "name" : "Idempotency-Key",
+          "in" : "header",
+          "description" : "16-128 visible ASCII characters, unique per merchant and operation",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreatePaymentIntentRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Payment intent created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid amount, malformed request, or missing/invalid idempotency key",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "Idempotency key reused for a different request, or still in progress",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "422" : {
+            "description" : "Unsupported currency",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/payment-intents/{id}/refunds" : {
+      "post" : {
+        "tags" : [ "payment-intent-controller" ],
+        "summary" : "Refund a captured payment intent",
+        "description" : "Refunds all or part of the remaining refundable (captured minus already refunded) amount. Never calls the PSP; the refunded amount and its compensating ledger transaction are persisted in one local transaction. The original capture entries are never modified.",
+        "operationId" : "refund",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "Idempotency-Key",
+          "in" : "header",
+          "description" : "16-128 visible ASCII characters, unique per merchant and operation",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefundRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Refund applied (state is PARTIALLY_REFUNDED or REFUNDED)",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid amount, malformed request, or missing/invalid idempotency key",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Payment intent absent or owned by another merchant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "Refund exceeds the remaining refundable amount, invalid transition, idempotency key reused, still in progress, or lost a concurrent race",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "422" : {
+            "description" : "Unsupported currency",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/payment-intents/{id}/captures" : {
+      "post" : {
+        "tags" : [ "payment-intent-controller" ],
+        "summary" : "Capture an authorized payment intent",
+        "description" : "Captures all or part of the remaining authorized amount. Never calls the PSP; the captured amount and its balanced ledger transaction are persisted in one local transaction.",
+        "operationId" : "capture",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "Idempotency-Key",
+          "in" : "header",
+          "description" : "16-128 visible ASCII characters, unique per merchant and operation",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CaptureRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Capture applied (state is PARTIALLY_CAPTURED or CAPTURED)",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Invalid amount, malformed request, or missing/invalid idempotency key",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Payment intent absent or owned by another merchant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "Capture exceeds remaining authorization, invalid transition, idempotency key reused, still in progress, or lost a concurrent race",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "422" : {
+            "description" : "Unsupported currency",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/payment-intents/{id}/authorize" : {
+      "post" : {
+        "tags" : [ "payment-intent-controller" ],
+        "summary" : "Authorize a payment intent",
+        "description" : "Requests authorization from the simulated PSP outside any database transaction. May return 202 with AUTHORIZATION_UNKNOWN when the provider outcome is not yet known; retrying with the same Idempotency-Key recovers through provider status lookup rather than repeating the call.",
+        "operationId" : "authorize",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "Idempotency-Key",
+          "in" : "header",
+          "description" : "16-128 visible ASCII characters, unique per merchant and operation",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Authorization reached a final state (AUTHORIZED, DECLINED, or FAILED)",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "202" : {
+            "description" : "Authorization outcome is not yet known (AUTHORIZATION_UNKNOWN)",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "Missing or invalid idempotency key",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Payment intent absent or owned by another merchant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "409" : {
+            "description" : "Invalid transition, idempotency key reused, or still in progress",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/reconciliation/cases" : {
+      "get" : {
+        "tags" : [ "reconciliation-controller" ],
+        "summary" : "List detected mismatches",
+        "description" : "Newest first. Filter by status to see open-case counts, ages, and severities at a glance.",
+        "operationId" : "cases",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "OPEN", "INVESTIGATING", "RESOLVED", "IGNORED_WITH_REASON" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Matching cases",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ReconciliationCaseResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "operatorBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/payment-intents/{id}" : {
+      "get" : {
+        "tags" : [ "payment-intent-controller" ],
+        "summary" : "Read a payment intent",
+        "description" : "Returns the current state of a payment intent owned by the authenticated merchant.",
+        "operationId" : "get",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Payment intent found",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentIntentResponse"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Payment intent absent or owned by another merchant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentIntentResponse"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/payment-intents/{id}/timeline" : {
+      "get" : {
+        "tags" : [ "payment-intent-controller" ],
+        "summary" : "Read a payment intent's timeline",
+        "description" : "Correlates audit evidence, resolved provider results, and ledger postings for one payment intent, ordered by occurrence time ascending.",
+        "operationId" : "timeline",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "Timeline entries, oldest first (may be empty)",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/TimelineEntry"
+                  }
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "Payment intent absent or owned by another merchant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/TimelineEntry"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    },
+    "/api/v1/ledger/accounts/{accountId}/entries" : {
+      "get" : {
+        "tags" : [ "ledger-account-entries-controller" ],
+        "summary" : "Browse a ledger account's entries",
+        "description" : "Cursor-paginated, oldest first. Only the authenticated merchant's own merchant-payable account is browsable in the MVP.",
+        "operationId" : "entries",
+        "parameters" : [ {
+          "name" : "accountId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "description" : "Opaque token from a previous response's nextCursor. Omit for the first page.",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "description" : "Maximum entries to return, 1-200.",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 50
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "A page of entries",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LedgerEntryPageResponse"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "The cursor parameter is not a value this API previously returned",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LedgerEntryPageResponse"
+                }
+              }
+            }
+          },
+          "404" : {
+            "description" : "No such account for the authenticated merchant",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LedgerEntryPageResponse"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ {
+          "merchantBasicAuth" : [ ]
+        } ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "ReconciliationCaseResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "paymentIntentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "mismatchType" : {
+            "type" : "string",
+            "example" : "AUTHORIZATION_OUTCOME_DIVERGENCE"
+          },
+          "severity" : {
+            "type" : "string",
+            "example" : "HIGH"
+          },
+          "status" : {
+            "type" : "string",
+            "example" : "OPEN"
+          },
+          "localEvidence" : {
+            "type" : "string",
+            "example" : "CAPTURED"
+          },
+          "providerEvidence" : {
+            "type" : "string",
+            "example" : "DECLINED:insufficient_funds"
+          },
+          "detectedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "resolution" : {
+            "$ref" : "#/components/schemas/ReconciliationResolutionResponse"
+          }
+        }
+      },
+      "ReconciliationCheckResponse" : {
+        "type" : "object",
+        "properties" : {
+          "outcome" : {
+            "type" : "string",
+            "example" : "MISMATCH_DETECTED"
+          },
+          "resolvedState" : {
+            "type" : [ "string", "null" ],
+            "example" : "AUTHORIZED"
+          },
+          "reconciliationCase" : {
+            "$ref" : "#/components/schemas/ReconciliationCaseResponse"
+          }
+        }
+      },
+      "ReconciliationResolutionResponse" : {
+        "type" : "object",
+        "properties" : {
+          "operatorId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "action" : {
+            "type" : "string",
+            "example" : "COMPENSATE"
+          },
+          "compensatingTransactionReference" : {
+            "type" : "string"
+          },
+          "resolvedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ResolveReconciliationCaseRequest" : {
+        "type" : "object",
+        "properties" : {
+          "reason" : {
+            "type" : "string",
+            "description" : "Why this resolution is correct. Required and preserved as permanent evidence.",
+            "example" : "Confirmed with provider support ticket #4821; funds were never actually captured.",
+            "minLength" : 1
+          },
+          "action" : {
+            "type" : "string",
+            "enum" : [ "ACKNOWLEDGE_NO_ACTION", "COMPENSATE", "IGNORE" ],
+            "example" : "COMPENSATE"
+          },
+          "confirm" : {
+            "type" : "boolean",
+            "description" : "Must be true. An explicit confirmation guards against an accidental financial correction."
+          }
+        },
+        "required" : [ "action", "reason" ]
+      },
+      "CreatePaymentIntentRequest" : {
+        "type" : "object",
+        "properties" : {
+          "amountInMinorUnits" : {
+            "type" : "string",
+            "description" : "Positive integer amount in minor currency units.",
+            "example" : "12500",
+            "minLength" : 1,
+            "pattern" : "[0-9]{1,19}"
+          },
+          "currency" : {
+            "type" : "string",
+            "description" : "MVP accepts BRL only.",
+            "example" : "BRL",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z]{3}"
+          }
+        },
+        "required" : [ "amountInMinorUnits", "currency" ]
+      },
+      "RefundRequest" : {
+        "type" : "object",
+        "properties" : {
+          "amountInMinorUnits" : {
+            "type" : "string",
+            "description" : "Positive integer amount to refund, in minor currency units. May be less than the refundable amount for a partial refund.",
+            "example" : "3000",
+            "minLength" : 1,
+            "pattern" : "[0-9]{1,19}"
+          },
+          "currency" : {
+            "type" : "string",
+            "description" : "Must match the payment intent's currency. MVP accepts BRL only.",
+            "example" : "BRL",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z]{3}"
+          }
+        },
+        "required" : [ "amountInMinorUnits", "currency" ]
+      },
+      "CaptureRequest" : {
+        "type" : "object",
+        "properties" : {
+          "amountInMinorUnits" : {
+            "type" : "string",
+            "description" : "Positive integer amount to capture, in minor currency units. May be less than the remaining authorized amount for a partial capture.",
+            "example" : "4000",
+            "minLength" : 1,
+            "pattern" : "[0-9]{1,19}"
+          },
+          "currency" : {
+            "type" : "string",
+            "description" : "Must match the payment intent's currency. MVP accepts BRL only.",
+            "example" : "BRL",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z]{3}"
+          }
+        },
+        "required" : [ "amountInMinorUnits", "currency" ]
+      },
+      "PaymentIntentResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "amountInMinorUnits" : {
+            "type" : "string",
+            "example" : "12500"
+          },
+          "currency" : {
+            "type" : "string",
+            "example" : "BRL"
+          },
+          "state" : {
+            "type" : "string",
+            "example" : "CREATED"
+          },
+          "capturedAmountInMinorUnits" : {
+            "type" : "string",
+            "example" : "0"
+          },
+          "refundedAmountInMinorUnits" : {
+            "type" : "string",
+            "example" : "0"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "TimelineEntry" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "enum" : [ "AUDIT_EVENT", "PROVIDER_RESULT", "LEDGER_TRANSACTION", "WEBHOOK_DELIVERY" ]
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "occurredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "details" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "LedgerEntryPageResponse" : {
+        "type" : "object",
+        "properties" : {
+          "entries" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LedgerEntryResponse"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ],
+            "description" : "Opaque token for the next page, or null if this is the last page."
+          }
+        }
+      },
+      "LedgerEntryResponse" : {
+        "type" : "object",
+        "properties" : {
+          "businessEffectReference" : {
+            "type" : "string",
+            "example" : "capture:2f9a1e2c-8b1e-4c2a-9a0e-2c8b1e4c2a9a:idem-key-001"
+          },
+          "direction" : {
+            "type" : "string",
+            "example" : "DEBIT"
+          },
+          "amountInMinorUnits" : {
+            "type" : "string",
+            "example" : "4000"
+          },
+          "currency" : {
+            "type" : "string",
+            "example" : "BRL"
+          },
+          "postedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "operatorBasicAuth" : {
+        "type" : "http",
+        "scheme" : "basic"
+      },
+      "merchantBasicAuth" : {
+        "type" : "http",
+        "scheme" : "basic"
+      }
+    }
+  }
+}

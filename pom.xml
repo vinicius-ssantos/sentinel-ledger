@@ -163,6 +163,57 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+			<plugin>
+				<!--
+				Informational only (AGENTS.md: "Coverage percentage alone is not evidence that an invariant
+				holds"): no <rule> check goal is bound, so a low or falling number never fails the build. The
+				report is a build artifact for reviewers who want it, not a gate.
+				-->
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.13</version>
+				<executions>
+					<execution>
+						<id>jacoco-prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>jacoco-report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<!--
+			Not part of the default build or CI: SBOM generation is scoped to "before the first release" per
+			issue #14, not every PR. Run explicitly with `./mvnw -Psbom package`.
+			-->
+			<id>sbom</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.cyclonedx</groupId>
+						<artifactId>cyclonedx-maven-plugin</artifactId>
+						<executions>
+							<execution>
+								<phase>package</phase>
+								<goals>
+									<goal>makeAggregateBom</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
