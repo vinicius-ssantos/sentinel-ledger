@@ -6,7 +6,6 @@ BASE_URL="${SENTINEL_DEMO_BASE_URL:-http://localhost:8080}"
 MERCHANT_USERNAME="${SENTINEL_MERCHANT_API_KEY_ID:-sentinel-dev-merchant}"
 MERCHANT_PASSWORD="${SENTINEL_MERCHANT_API_KEY_SECRET:-sentinel-dev-secret}"
 RESET_DATABASE=false
-KEEP_APP=false
 APP_STARTED_BY_SCRIPT=false
 APP_PID=""
 TMP_DIR="$(mktemp -d)"
@@ -18,7 +17,7 @@ RESPONSE_HEADERS=""
 
 usage() {
   cat <<'EOF'
-Usage: bash scripts/golden-demo.sh [--reset] [--keep-app]
+Usage: bash scripts/golden-demo.sh [--reset]
 
 Runs the executable Sentinel Ledger core golden path:
   1. persistent idempotency replay;
@@ -30,7 +29,6 @@ Runs the executable Sentinel Ledger core golden path:
 Options:
   --reset     Stop Compose services and remove local volumes before starting.
               Refuses to reset while an existing Sentinel application is healthy.
-  --keep-app  Keep the Spring Boot process running when this script started it.
   -h, --help  Show this help.
 
 Environment overrides:
@@ -60,7 +58,7 @@ new_idempotency_key() {
 header_value() {
   local name="$1"
   printf '%s\n' "$RESPONSE_HEADERS" \
-    | awk -v expected="$name" 'BEGIN { IGNORECASE = 1 } $0 ~ "^" expected ":" { sub(/^[^:]+:[[:space:]]*/, ""); value=$0 } END { print value }'
+    | awk -v expected="$name" 'tolower(substr($0, 1, length(expected) + 1)) == tolower(expected ":") { sub(/^[^:]+:[[:space:]]*/, ""); value=$0 } END { print value }'
 }
 
 assert_status() {
@@ -146,7 +144,7 @@ cleanup() {
     tail -n 80 "$APP_LOG" >&2 || true
   fi
 
-  if [[ "$APP_STARTED_BY_SCRIPT" == true && "$KEEP_APP" == false && -n "$APP_PID" ]]; then
+  if [[ "$APP_STARTED_BY_SCRIPT" == true && -n "$APP_PID" ]]; then
     kill "$APP_PID" 2>/dev/null || true
     wait "$APP_PID" 2>/dev/null || true
   fi
@@ -160,9 +158,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --reset)
       RESET_DATABASE=true
-      ;;
-    --keep-app)
-      KEEP_APP=true
       ;;
     -h|--help)
       usage
