@@ -30,5 +30,10 @@ jobs:
           java-version: '25'
           cache: maven
 
+      - name: Validate golden demo shell
+        run: |
+          bash -n scripts/golden-demo.sh
+          bash scripts/golden-demo.sh --help
+
       - name: Verify
         run: ./mvnw --batch-mode --no-transfer-progress verify
