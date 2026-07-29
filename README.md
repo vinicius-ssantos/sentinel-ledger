@@ -2,7 +2,7 @@
 
 > Payment orchestration with an immutable double-entry ledger, persistent idempotency, reconciliation, and production-grade observability.
 
-[![Status: Phase 1](https://img.shields.io/badge/status-phase%201%20modules-1f6feb)](#project-status)
+[![Status: Phase 3](https://img.shields.io/badge/status-phase%203%20modules-1f6feb)](#project-status)
 [![Java 25](https://img.shields.io/badge/Java-25-ED8B00?logo=openjdk)](#technology-strategy)
 [![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot)](#technology-strategy)
 [![Architecture: Modular Monolith](https://img.shields.io/badge/architecture-modular%20monolith-1f6feb)](#architecture)
@@ -34,6 +34,20 @@ Sentinel Ledger treats those situations as primary design inputs, not as afterth
 **Current phase: Phase 1 (executable modular foundation) and Phase 2 (financial correctness and recovery) deliverables are implemented. Phase 3 (async reliability and observability) has a transactional outbox, a RabbitMQ publisher/consumer with retry and dead-lettering, signed webhook delivery with replay-protected verification, correlation-tagged structured logs, and cardinality-safe business metrics with dashboard/alert artifacts. Distributed tracing is not yet implemented.**
 
 The repository contains an executable Java 25 and Spring Boot 4.1 foundation with Spring Modulith 2.1. Functional module boundaries, allowed dependency directions, cycle detection, internal-package protection, isolated module bootstrap, generated module documentation, health checks, and reproducible Maven verification are enforced in the build. Payment intent creation, lookup, authorization against a deterministic simulated PSP, and full or partial capture and refund are backed by PostgreSQL behind an authenticated merchant boundary and persistent idempotency, with no database transaction held across the provider call. The `ledger` module posts balanced, append-only transactions (enforced by a PostgreSQL trigger, not just application code) with a rebuildable balance projection; both capture and refund post to it today. The `audit` module records redacted, append-only evidence (also PostgreSQL-trigger-enforced) for every payment create/authorize/capture/refund/reconciliation-resolution command in the same local transaction as its business effect. A payment intent's timeline correlates that audit evidence with resolved provider results and ledger postings, and a merchant can browse their own ledger account's entries with keyset (not offset) cursor pagination. The `reconciliation` module detects authorization outcome divergence between local and simulated-provider evidence (on-demand and via a scheduled sweep for stuck uncertain authorizations), deduplicates open cases by fingerprint, and lets a separately authenticated operator resolve a case with a compensating ledger transaction when funds need reversing. The `outbox` module persists a publication intent in the same local transaction as capture and refund, then claims, dispatches, and completes it through a separate cycle so a crash between commit and delivery loses no event. The `integration.messaging` module implements delivery against RabbitMQ (behind `sentinel.messaging.enabled`, off by default so no test in the suite needs a broker): a topic exchange fans events out, and a message that keeps failing retries with bounded exponential backoff before landing in a dead-letter queue instead of looping forever. Its consumer turns each event into a signed, timestamped webhook call through the `webhooks` module (HMAC-SHA256 over the timestamp, delivery id, and body); a redelivered message is deduplicated by delivery *status*, not mere consumption, so a genuinely failed delivery still retries while an already-succeeded one is never re-sent, and both success and final failure are recorded and surface on the payment timeline. `webhooks` also exposes `WebhookSignatureVerifier`, the reference a receiver follows to reject an invalid, expired, or replayed callback. Every request carries an `X-Correlation-Id` (generated if the caller didn't send one, placed in the logging MDC ahead of Spring Security so even a rejected request is correlatable), console logs are structured JSON, and business outcomes across authorization, capture, refund, reconciliation, the outbox, and webhook delivery are exposed as cardinality-safe Micrometer metrics at `/actuator/prometheus` — see [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for the full catalog and the dashboard/alert artifacts checked in as dashboard-as-code. Distributed tracing is not yet implemented. Production-readiness claims remain intentionally unimplemented.
+
+## Executable golden path
+
+A reviewer can execute the current financial core from a clean checkout with one command:
+
+```bash
+bash scripts/golden-demo.sh --reset
+```
+
+Prerequisites are JDK 25, Docker with Compose, `curl`, and `jq`. The script starts PostgreSQL and the application when needed, uses only synthetic BRL data and development credentials, and exits non-zero if any invariant or expected API outcome fails.
+
+The current command proves persistent idempotency replay, conflicting key reuse, deterministic authorization, full capture, partial refund, final monetary state, and correlated audit/provider/ledger evidence. Concurrent capture, PSP timeout-after-processing, and restart-safe reconciliation remain separately documented as pending external demo automation rather than being presented as complete.
+
+See [the golden demo runbook](docs/DEMO_RUNBOOK.md) for exact behavior, reset semantics, evidence, and limitations.
 
 ## Local development
 
@@ -297,7 +311,7 @@ Repository-wide instructions for coding agents live in [AGENTS.md](AGENTS.md). [
 
 ## License
 
-No open-source license has been selected yet. Until a license is explicitly added, all rights remain reserved by the copyright holder.
+Licensed under the [MIT License](LICENSE).
 
 ## Author
 
