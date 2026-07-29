@@ -17,7 +17,7 @@ jobs:
   verify:
     name: Maven verify (Java 25)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
@@ -37,3 +37,10 @@ jobs:
 
       - name: Verify
         run: ./mvnw --batch-mode --no-transfer-progress verify
+
+      - name: Run core golden demo
+        run: bash scripts/golden-demo.sh --reset
+
+      - name: Stop golden demo services
+        if: always()
+        run: docker compose down --volumes --remove-orphans
