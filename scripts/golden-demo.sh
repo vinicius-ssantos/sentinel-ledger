@@ -191,7 +191,7 @@ else
   fi
 
   log "Starting PostgreSQL"
-  docker compose up --detach postgres
+  docker compose up --detach --wait postgres
 
   log "Starting Sentinel Ledger"
   ./mvnw --batch-mode --no-transfer-progress spring-boot:run >"$APP_LOG" 2>&1 &
