@@ -13,7 +13,7 @@ services:
       timeout: 5s
       retries: 10
     volumes:
-      - sentinel-postgres-data:/var/lib/postgresql/data
+      - sentinel-postgres-data:/var/lib/postgresql
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
