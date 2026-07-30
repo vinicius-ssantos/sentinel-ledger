@@ -136,6 +136,23 @@ wait_for_application() {
   fail "Sentinel Ledger did not become healthy within ${attempts}s"
 }
 
+wait_for_postgres() {
+  local attempts=90
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if docker compose exec -T postgres pg_isready \
+        -U "${SENTINEL_DB_USERNAME:-sentinel}" \
+        -d "${SENTINEL_DB_NAME:-sentinel_ledger}" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  docker compose logs postgres >&2 || true
+  fail "PostgreSQL did not become ready within ${attempts}s"
+}
+
 cleanup() {
   local exit_code=$?
 
@@ -191,7 +208,8 @@ else
   fi
 
   log "Starting PostgreSQL"
-  docker compose up --detach --wait postgres
+  docker compose up --detach postgres
+  wait_for_postgres
 
   log "Starting Sentinel Ledger"
   ./mvnw --batch-mode --no-transfer-progress spring-boot:run >"$APP_LOG" 2>&1 &
